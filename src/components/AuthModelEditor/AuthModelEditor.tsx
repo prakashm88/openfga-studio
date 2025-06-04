@@ -14,7 +14,7 @@ export const AuthModelEditor = ({ value, onChange }: AuthModelEditorProps) => {
   }, []);
 
   return (
-    <div style={{ height: '400px', border: '1px solid #ccc' }}>
+    <div style={{ height: '600px', border: '1px solid #ccc' }}>
       <Editor
         height="100%"
         defaultLanguage="yaml"

@@ -7,10 +7,20 @@
 }
 
 .editor-container {
-  height: 400px;
+  height: 600px;
   border: 1px solid #ccc;
   border-radius: 4px;
   overflow: hidden;
+}
+
+.react-flow-wrapper {
+  flex-grow: 1;
+  height: 100%;
+  min-height: 500px;
+}
+
+.react-flow__container {
+  height: 100%;
 }
 
 .graph-container {

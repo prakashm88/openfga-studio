@@ -91,10 +91,9 @@ export const OpenFGAService = {
     return response.data;
   },
 
-  async writeAuthorizationModel(storeId: string, model: AuthorizationModel) {
+  async writeAuthorizationModel(storeId: string, dslContent: string) {
     const response = await api.post(`/stores/${storeId}/authorization-models`, {
-      schema_version: model.schema_version || '1.1',
-      type_definitions: model.type_definitions,
+      type_definitions: dslContent,
     });
     return response.data;
   },
