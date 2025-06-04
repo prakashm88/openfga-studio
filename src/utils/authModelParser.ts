@@ -92,22 +92,22 @@ function parseDSL(dsl: string): AuthModel {
 
 const LAYOUT_CONFIG = {
   // Base positioning
-  ROOT_X: 150,         // Starting X position
-  ROOT_Y: 60,          // Reduced starting Y position
+  ROOT_X: 100,         // Increased starting X position
+  ROOT_Y: 80,          // Increased starting Y position
   
   // Spacing configuration
-  LEVEL_SPACING_X: 500,    // Horizontal space between levels
-  SIBLING_SPACING_Y: 100,  // Reduced vertical space between siblings for better compactness
-  NODE_GROUP_SPACING: 140, // Space between groups
-  INDENTATION: 180,       // Indentation for hierarchy visualization
+  LEVEL_SPACING_X: 600,    // More horizontal space between levels
+  SIBLING_SPACING_Y: 220,  // Significantly more vertical space between siblings
+  NODE_GROUP_SPACING: 180, // More space between groups
+  INDENTATION: 200,       // Deeper indentation for better hierarchy visualization
   
-  // Node sizing for better proportions
+  // Node sizing (slightly larger for better readability)
   NODE_WIDTH: {
-    TYPE: 140,
-    RELATION: 160,
-    DEFINITION: 220
+    TYPE: 160,
+    RELATION: 180,
+    DEFINITION: 240
   },
-  NODE_HEIGHT: 40,
+  NODE_HEIGHT: 50,
   
   // Visual adjustments
   PADDING: 60,            // More padding for better spacing
@@ -118,7 +118,7 @@ const LAYOUT_CONFIG = {
     RELATION_EDGE: '#4caf50',
     DEFINITION_EDGE: '#ff9800'
   }
-};
+} as const;
 
 export function parseAuthModelToGraph(dslContent: string): { nodes: Node[]; edges: Edge[] } {
   try {
