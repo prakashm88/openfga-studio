@@ -1,4 +1,4 @@
-import type { Node, Edge } from 'reactflow';
+import { type Node, type Edge, MarkerType } from 'reactflow';
 
 interface RelationType {
   name: string;
@@ -90,6 +90,36 @@ function parseDSL(dsl: string): AuthModel {
   }
 }
 
+const LAYOUT_CONFIG = {
+  // Base positioning
+  ROOT_X: 150,         // Starting X position
+  ROOT_Y: 60,          // Reduced starting Y position
+  
+  // Spacing configuration
+  LEVEL_SPACING_X: 500,    // Horizontal space between levels
+  SIBLING_SPACING_Y: 100,  // Reduced vertical space between siblings for better compactness
+  NODE_GROUP_SPACING: 140, // Space between groups
+  INDENTATION: 180,       // Indentation for hierarchy visualization
+  
+  // Node sizing for better proportions
+  NODE_WIDTH: {
+    TYPE: 140,
+    RELATION: 160,
+    DEFINITION: 220
+  },
+  NODE_HEIGHT: 40,
+  
+  // Visual adjustments
+  PADDING: 60,            // More padding for better spacing
+  
+  // Colors
+  COLORS: {
+    TYPE_EDGE: '#2684ff',
+    RELATION_EDGE: '#4caf50',
+    DEFINITION_EDGE: '#ff9800'
+  }
+};
+
 export function parseAuthModelToGraph(dslContent: string): { nodes: Node[]; edges: Edge[] } {
   try {
     const model = parseDSL(dslContent);
@@ -97,20 +127,42 @@ export function parseAuthModelToGraph(dslContent: string): { nodes: Node[]; edge
     const edges: Edge[] = [];
     let nodeId = 1;
     
-    // Position calculation helpers
-    const typeSpacing = 300;
-    const relationSpacing = 150;
-    const maxNodesPerColumn = 4;
-    let currentColumn = 0;
-    let currentRow = 0;
-
-    // Create nodes for each type with improved layout
-    model.typeDefinitions.forEach((typeDef) => {
-      const typeNodeId = `type-${nodeId}`;
+    // Calculate total height needed per type
+    const typeHeights: Record<number, number> = {};
+    model.typeDefinitions.forEach((typeDef, index) => {
+      // Base height for type node
+      let height = LAYOUT_CONFIG.NODE_HEIGHT + LAYOUT_CONFIG.PADDING;
       
-      // Calculate position with column wrap
-      const x = currentColumn * typeSpacing;
-      const y = (currentRow % maxNodesPerColumn) * relationSpacing;
+      // Add height for each relation and its definitions
+      typeDef.relations.forEach(relation => {
+        height += LAYOUT_CONFIG.SIBLING_SPACING_Y; // Space for relation
+        const defCount = relation.definition.split(' or ').length;
+        height += defCount * (LAYOUT_CONFIG.SIBLING_SPACING_Y / 2); // Space for definitions
+      });
+      
+      typeHeights[index] = height;
+    });
+    
+    // Add root node
+    const rootNodeId = 'root';
+    nodes.push({
+      id: rootNodeId,
+      data: { 
+        label: 'Authorization Model',
+        type: 'type'
+      },
+      position: { x: LAYOUT_CONFIG.ROOT_X, y: LAYOUT_CONFIG.ROOT_Y },
+      type: 'default',
+      style: { width: LAYOUT_CONFIG.NODE_WIDTH.TYPE }
+    });
+
+    let maxY = LAYOUT_CONFIG.ROOT_Y;
+
+    // Layout main type nodes horizontally with better vertical distribution
+    model.typeDefinitions.forEach((typeDef, typeIndex) => {
+      const typeNodeId = `type-${nodeId++}`;
+      const typeX = LAYOUT_CONFIG.ROOT_X + ((typeIndex + 1) * LAYOUT_CONFIG.LEVEL_SPACING_X);
+      const typeY = LAYOUT_CONFIG.ROOT_Y + LAYOUT_CONFIG.NODE_GROUP_SPACING;
       
       // Add type node
       nodes.push({
@@ -119,46 +171,70 @@ export function parseAuthModelToGraph(dslContent: string): { nodes: Node[]; edge
           label: typeDef.name,
           type: 'type'
         },
-        position: { x, y },
-        type: 'default'
+        position: { x: typeX, y: typeY },
+        type: 'default',
+        style: { width: LAYOUT_CONFIG.NODE_WIDTH.TYPE }
       });
 
-      // Process relations with better spacing
-      typeDef.relations.forEach((relation, index) => {
-        nodeId++;
-        const relationNodeId = `relation-${nodeId}`;
-        const relationX = x + 150;
-        const relationY = y + (index + 1) * (relationSpacing / 2);
+      // Connect to root with smoothstep edge
+      edges.push({
+        id: `edge-root-${typeNodeId}`,
+        source: rootNodeId,
+        target: typeNodeId,
+        type: 'smoothstep',
+        animated: true,
+        style: { stroke: LAYOUT_CONFIG.COLORS.TYPE_EDGE }
+      });
 
-        // Add relation node
+      // Track vertical position for the current type's nodes
+      let currentY = typeY + LAYOUT_CONFIG.NODE_GROUP_SPACING;
+
+      // Process relations vertically under each type
+      typeDef.relations.forEach((relation) => {
+        const relationNodeId = `relation-${nodeId++}`;
+        
+        // Position relation node
+        currentY += LAYOUT_CONFIG.SIBLING_SPACING_Y;
         nodes.push({
           id: relationNodeId,
           data: { 
             label: relation.name,
             type: 'relation'
           },
-          position: { x: relationX, y: relationY },
-          type: 'default'
+          position: { 
+            x: typeX + LAYOUT_CONFIG.INDENTATION,
+            y: currentY
+          },
+          type: 'default',
+          style: { width: LAYOUT_CONFIG.NODE_WIDTH.RELATION }
         });
 
-        // Add edge from type to relation
+        // Connect type to relation
         edges.push({
           id: `edge-${typeNodeId}-${relationNodeId}`,
           source: typeNodeId,
           target: relationNodeId,
           type: 'smoothstep',
-          animated: true,
-          style: { stroke: '#2684ff' }
+          style: { 
+            stroke: LAYOUT_CONFIG.COLORS.RELATION_EDGE,
+            strokeWidth: 2
+          },
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            width: 20,
+            height: 20,
+            color: LAYOUT_CONFIG.COLORS.RELATION_EDGE
+          }
         });
 
-        // Process relation definition parts
+        // Process relation definitions with better spacing
         const parts = relation.definition.split(' or ');
-        parts.forEach((part, partIndex) => {
-          nodeId++;
+        parts.forEach(part => {
           const cleanPart = part.trim();
-          const definitionNodeId = `def-${nodeId}`;
-          const definitionX = relationX + 150;
-          const definitionY = relationY + (partIndex * 40);
+          const definitionNodeId = `def-${nodeId++}`;
+          
+          // Calculate Y position with proportional spacing
+          currentY += LAYOUT_CONFIG.SIBLING_SPACING_Y / 2;
 
           // Add definition node
           nodes.push({
@@ -167,33 +243,41 @@ export function parseAuthModelToGraph(dslContent: string): { nodes: Node[]; edge
               label: cleanPart,
               type: 'definition'
             },
-            position: { x: definitionX, y: definitionY },
-            type: 'default'
+            position: { 
+              x: typeX + LAYOUT_CONFIG.INDENTATION * 2,
+              y: currentY
+            },
+            type: 'default',
+            style: { width: LAYOUT_CONFIG.NODE_WIDTH.DEFINITION }
           });
 
-          // Add edge from relation to definition
+          // Connect relation to definition
           edges.push({
             id: `edge-${relationNodeId}-${definitionNodeId}`,
             source: relationNodeId,
             target: definitionNodeId,
             type: 'smoothstep',
-            style: { stroke: '#4caf50' }
+            style: { 
+              stroke: LAYOUT_CONFIG.COLORS.DEFINITION_EDGE,
+              strokeWidth: 2
+            },
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              width: 20,
+              height: 20,
+              color: LAYOUT_CONFIG.COLORS.DEFINITION_EDGE
+            }
           });
         });
+
+        // Add some extra space after the last definition
+        currentY += LAYOUT_CONFIG.SIBLING_SPACING_Y / 2;
       });
 
-      // Update position tracking
-      if (currentRow >= maxNodesPerColumn - 1) {
-        currentColumn++;
-        currentRow = 0;
-      } else {
-        currentRow++;
-      }
-      nodeId++;
+      // Update maxY for overall graph height
+      maxY = Math.max(maxY, currentY);
     });
 
-    console.log('Generated nodes:', nodes);
-    console.log('Generated edges:', edges);
     return { nodes, edges };
   } catch (error) {
     console.error('Failed to parse authorization model:', error);

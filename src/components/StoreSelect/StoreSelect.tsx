@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Box, Select, MenuItem, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
 import { OpenFGAService } from '../../services/OpenFGAService';
 
 interface StoreSelectProps {
@@ -17,6 +18,7 @@ export const StoreSelect = ({ selectedStore, onStoreChange }: StoreSelectProps) 
     try {
       const storesData = await OpenFGAService.listStores();
       setStores(storesData.stores);
+      // Only auto-select the first store if there's no selection and we have stores
       if (storesData.stores.length > 0 && !selectedStore) {
         onStoreChange(storesData.stores[0].id);
       }
@@ -25,32 +27,41 @@ export const StoreSelect = ({ selectedStore, onStoreChange }: StoreSelectProps) 
     }
   };
 
+  // Load stores only once when component mounts
   useEffect(() => {
     loadStores();
-  }, []);
+  }, []); // Empty dependency array
 
   const handleCreateStore = async () => {
     if (!newStoreName) return;
     setIsLoading(true);
     try {
       const store = await OpenFGAService.createStore(newStoreName);
+      setIsCreateDialogOpen(false);
+      setNewStoreName('');
+      // Refresh the stores list and select the new store
       await loadStores();
       onStoreChange(store.id);
-      setIsCreateDialogOpen(false);
     } catch (error) {
       console.error('Failed to create store:', error);
     } finally {
       setIsLoading(false);
-      setNewStoreName('');
     }
   };
 
   return (
-    <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 3 }}>
+    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
       <Select
         value={selectedStore || ''}
         onChange={(e) => onStoreChange(e.target.value)}
-        sx={{ minWidth: 200 }}
+        size="small"
+        sx={{ 
+          minWidth: 200,
+          bgcolor: 'background.paper',
+          '& .MuiSelect-select': {
+            py: 1
+          }
+        }}
         displayEmpty
       >
         <MenuItem value="" disabled>Select a store</MenuItem>
@@ -61,8 +72,13 @@ export const StoreSelect = ({ selectedStore, onStoreChange }: StoreSelectProps) 
         ))}
       </Select>
       
-      <Button variant="contained" onClick={() => setIsCreateDialogOpen(true)}>
-        Create Store
+      <Button 
+        variant="contained" 
+        size="small"
+        onClick={() => setIsCreateDialogOpen(true)}
+        startIcon={<AddIcon />}
+      >
+        New Store
       </Button>
 
       <Dialog open={isCreateDialogOpen} onClose={() => setIsCreateDialogOpen(false)}>

@@ -1,14 +1,16 @@
 import axios from 'axios';
+import { config } from '../config';
+import { dslToJson, jsonToDsl, type OpenFGAModel } from '../utils/modelConverter';
 
 interface OpenFGAError {
   message: string;
   code?: string;
-  details?: any;
+  details?: Record<string, unknown>;
 }
 
 class OpenFGAServiceError extends Error {
   code?: string;
-  details?: any;
+  details?: Record<string, unknown>;
 
   constructor(error: OpenFGAError) {
     super(error.message);
@@ -18,8 +20,6 @@ class OpenFGAServiceError extends Error {
   }
 }
 
-import { config } from '../config';
-
 const api = axios.create({
   baseURL: '/api',
   headers: {
@@ -27,7 +27,7 @@ const api = axios.create({
     'Accept': 'application/json',
     ...(config.apiToken ? { 'Authorization': `Bearer ${config.apiToken}` } : {}),
   },
-  timeout: 10000, // 10 second timeout
+  timeout: 10000,
 });
 
 // Add response interceptor for error handling
@@ -49,30 +49,6 @@ export interface RelationshipTuple {
   object: string;
 }
 
-export interface RelationDefinition {
-  this?: Record<string, never>;
-  union?: {
-    child: string[];
-  };
-  computedUserset?: {
-    relation: string;
-  };
-}
-
-export interface TypeDefinition {
-  type: string;
-  relations?: Record<string, RelationDefinition>;
-}
-
-export interface AuthorizationModel {
-  schema_version: string;
-  type_definitions: TypeDefinition[];
-}
-
-export interface CheckResponse {
-  allowed: boolean;
-}
-
 export const OpenFGAService = {
   async listStores() {
     const response = await api.get('/stores');
@@ -80,10 +56,6 @@ export const OpenFGAService = {
   },
 
   async createStore(name: string) {
-    const storeId = config.storeId;
-    if (storeId) {
-      return { id: storeId };
-    }
     const response = await api.post('/stores', {
       name: name,
       description: 'OpenFGA Playground Store'
@@ -91,11 +63,36 @@ export const OpenFGAService = {
     return response.data;
   },
 
-  async writeAuthorizationModel(storeId: string, dslContent: string) {
-    const response = await api.post(`/stores/${storeId}/authorization-models`, {
-      type_definitions: dslContent,
-    });
-    return response.data;
+  async writeAuthorizationModel(storeId: string, model: string) {
+    try {
+      // Convert to JSON if it's in DSL format
+      const jsonModel = model.trim().startsWith('{') 
+        ? JSON.parse(model) as OpenFGAModel
+        : dslToJson(model);
+
+      // Validate the model has required fields
+      if (!jsonModel.schema_version || !Array.isArray(jsonModel.type_definitions)) {
+        throw new Error('Invalid authorization model format');
+      }
+
+      const response = await api.post(`/stores/${storeId}/authorization-models`, jsonModel);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to write authorization model:', error);
+      throw error;
+    }
+  },
+
+  async getAuthorizationModel(storeId: string) {
+    try {
+      const response = await api.get(`/stores/${storeId}/authorization-models`);
+      const latestModel = response.data.authorization_models[0];
+      // Convert JSON model to DSL for display
+      return latestModel ? jsonToDsl(latestModel) : config.defaultAuthorizationModel;
+    } catch (error) {
+      console.error('Failed to get authorization model:', error);
+      return config.defaultAuthorizationModel;
+    }
   },
 
   async writeTuple(storeId: string, tuple: RelationshipTuple) {

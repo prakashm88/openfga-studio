@@ -17,6 +17,7 @@
     "@mui/material": "^7.1.1",
     "@openfga/sdk": "^0.8.1",
     "axios": "^1.9.0",
+    "html-to-image": "^1.11.13",
     "http-proxy-middleware": "^3.0.5",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import Editor from '@monaco-editor/react';
+import { useEffect } from 'react';
+import Editor, { loader } from '@monaco-editor/react';
+import { useTheme } from '@mui/material';
 
 interface AuthModelEditorProps {
   value: string;
@@ -7,19 +8,29 @@ interface AuthModelEditorProps {
 }
 
 export const AuthModelEditor = ({ value, onChange }: AuthModelEditorProps) => {
-  const [mounted, setMounted] = useState(false);
+  const theme = useTheme();
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    loader.init().then(monacoInstance => {
+      monacoInstance.editor.defineTheme('custom-dark', {
+        base: 'vs-dark',
+        inherit: true,
+        rules: [],
+        colors: {
+          'editor.background': theme.palette.background.paper
+        }
+      });
+    });
+  }, [theme.palette.background.paper]);
 
   return (
-    <div style={{ height: '600px', border: '1px solid #ccc' }}>
+    <div style={{ height: '600px', border: `1px solid ${theme.palette.divider}` }}>
       <Editor
         height="100%"
         defaultLanguage="yaml"
         value={value}
         onChange={(value) => onChange(value || '')}
+        theme={theme.palette.mode === 'dark' ? 'custom-dark' : 'light'}
         options={{
           minimap: { enabled: false },
           scrollBeyondLastLine: false,
