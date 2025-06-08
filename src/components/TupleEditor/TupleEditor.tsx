@@ -1,9 +1,9 @@
 import { useState, useMemo } from 'react';
-import { TextField, Button, Box, Autocomplete } from '@mui/material';
+import { TextField, Button, Box, Autocomplete, Alert, Snackbar } from '@mui/material';
 import type { RelationshipMetadata } from '../../utils/tupleHelper';
 
 interface TupleEditorProps {
-  onSubmit: (tuple: { user: string; relation: string; object: string }) => void;
+  onSubmit: (tuple: { user: string; relation: string; object: string }) => Promise<void>;
   metadata?: RelationshipMetadata;
 }
 
@@ -12,6 +12,8 @@ export const TupleEditor = ({ onSubmit, metadata }: TupleEditorProps) => {
   const [user, setUser] = useState('');
   const [relation, setRelation] = useState('');
   const [object, setObject] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   // Available types from metadata
   const availableTypes = useMemo(() => 
@@ -35,18 +37,33 @@ export const TupleEditor = ({ onSubmit, metadata }: TupleEditorProps) => {
     [selectedType, relation, metadata]
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+    setLoading(true);
+
     const formattedObject = object.includes(':') ? object : `${selectedType}:${object}`;
-    onSubmit({ 
-      user: user.includes(':') || user.includes('#') ? user : `${availableUserTypes[0].split(':')[0]}:${user}`,
-      relation,
-      object: formattedObject 
-    });
-    setUser('');
-    setRelation('');
-    setObject('');
-    setSelectedType('');
+    const formattedUser = user.includes(':') || user.includes('#') ? 
+      user : 
+      `${availableUserTypes[0]?.split(':')[0] || 'user'}:${user}`;
+
+    try {
+      await onSubmit({ 
+        user: formattedUser,
+        relation,
+        object: formattedObject 
+      });
+
+      // Reset form on success
+      setUser('');
+      setRelation('');
+      setObject('');
+      setSelectedType('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add tuple');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -68,8 +85,16 @@ export const TupleEditor = ({ onSubmit, metadata }: TupleEditorProps) => {
           setUser('');
         }}
         options={availableRelations}
+        freeSolo
         disabled={!selectedType}
-        renderInput={(params) => <TextField {...params} label="Relation" required />}
+        renderInput={(params) => (
+          <TextField 
+            {...params} 
+            label="Relation" 
+            required 
+            helperText={availableRelations.length === 0 ? "Enter any relation name" : undefined}
+          />
+        )}
       />
       
       <Autocomplete
@@ -96,9 +121,24 @@ export const TupleEditor = ({ onSubmit, metadata }: TupleEditorProps) => {
         helperText={`Will be prefixed with '${selectedType}:' if no type prefix is provided`}
       />
 
-      <Button type="submit" variant="contained" disabled={!selectedType || !relation || !user || !object}>
-        Add Tuple
+      <Button 
+        type="submit" 
+        variant="contained" 
+        disabled={loading || !selectedType || !relation || !user || !object}
+      >
+        {loading ? 'Adding...' : 'Add Tuple'}
       </Button>
+
+      <Snackbar 
+        open={!!error} 
+        autoHideDuration={6000} 
+        onClose={() => setError(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setError(null)} severity="error" sx={{ width: '100%' }}>
+          {error}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

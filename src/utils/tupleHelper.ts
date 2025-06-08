@@ -2,8 +2,9 @@ import { dslToJson } from './modelConverter';
 
 interface TypeMetadata {
   type: string;
-  relations: string[];
-  userTypes: Map<string, string[]>;
+  relations: Array<string>;
+  userTypes: Map<string, Array<string>>;
+  allowDirectInput?: boolean;
 }
 
 export interface RelationshipMetadata {
@@ -74,73 +75,88 @@ export function parseTupleObject(object: string): { type: string; id: string } {
 
 export function extractRelationshipMetadata(modelStr: string): RelationshipMetadata {
   const types = new Map<string, TypeMetadata>();
+  const reverseRelations = new Map<string, Set<{targetType: string, relation: string}>>();
   
   try {
     // Try to parse as JSON first
     const model = JSON.parse(modelStr) as AuthorizationModel;
     
+    // First pass: collect all direct relations and build reverse index
     model.type_definitions.forEach((typeDef: TypeDefinition) => {
       const typeMetadata: TypeMetadata = {
         type: typeDef.type,
         relations: [],
-        userTypes: new Map()
+        userTypes: new Map(),
+        allowDirectInput: true
       };
 
       if (typeDef.relations) {
-        // Add all relations from the type definition
-        Object.entries(typeDef.relations).forEach(([relationName, relationDef]) => {
+        Object.entries(typeDef.relations).forEach(([relationName]) => {
           typeMetadata.relations.push(relationName);
           
-          // Get the user types that can be used in this relation
+          // Get explicit user types from metadata
           const directTypes = typeDef.metadata?.relations?.[relationName]?.directly_related_user_types || [];
           const userTypes = new Set<string>();
 
-          // Add explicitly defined types first
           directTypes.forEach(dt => {
+            // Add to reverse index
+            if (!reverseRelations.has(dt.type)) {
+              reverseRelations.set(dt.type, new Set());
+            }
+            reverseRelations.get(dt.type)?.add({
+              targetType: typeDef.type,
+              relation: relationName
+            });
+
+            // Add the type with proper formatting
             if (dt.relation) {
+              // For relations like group#member
               userTypes.add(`${dt.type}#${dt.relation}`);
             } else if (dt.wildcard) {
+              // For wildcard types like user:*
               userTypes.add(`${dt.type}:*`);
             } else if (dt.condition) {
+              // For conditional types
               userTypes.add(`${dt.type} with ${dt.condition}`);
             } else {
-              userTypes.add(dt.type);
+              // For direct types like user, group, folder
+              userTypes.add(`${dt.type}`);
             }
           });
 
-          // If no explicit types, infer them from the relation definition
-          if (userTypes.size === 0 && relationDef) {
-            // For direct relations
-            if ('this' in relationDef) {
-              userTypes.add('user');
-            }
-            
-            // For computed relations
-            if ('computedUserset' in relationDef && relationDef.computedUserset) {
-              userTypes.add('user');
-            }
-            
-            // For unions
-            if ('union' in relationDef && relationDef.union?.child) {
-              relationDef.union.child.forEach(child => {
-                if ('this' in child || 'computedUserset' in child) {
-                  userTypes.add('user');
-                }
-              });
-            }
-            
-            // For tuple-to-userset relations
-            if ('tupleToUserset' in relationDef && relationDef.tupleToUserset) {
-              userTypes.add('user');
-            }
+          // Store the user types in the metadata
+          if (userTypes.size > 0) {
+            typeMetadata.userTypes.set(relationName, Array.from(userTypes));
+          } else {
+            // Default to accepting user type if no explicit types are defined
+            typeMetadata.userTypes.set(relationName, ['user']);
           }
-          
-          typeMetadata.userTypes.set(relationName, Array.from(userTypes));
         });
       }
 
       types.set(typeDef.type, typeMetadata);
     });
+
+    // Second pass: add reverse relations to types that can be users
+    reverseRelations.forEach((targetRelations, userType) => {
+      const typeMetadata = types.get(userType) || {
+        type: userType,
+        relations: [],
+        userTypes: new Map(),
+        allowDirectInput: true
+      };
+
+      targetRelations.forEach(({targetType, relation}) => {
+        const relName = `can_be_${relation}_of_${targetType}`;
+        if (!typeMetadata.relations.includes(relName)) {
+          typeMetadata.relations.push(relName);
+          typeMetadata.userTypes.set(relName, [targetType]);
+        }
+      });
+
+      types.set(userType, typeMetadata);
+    });
+
   } catch (error: unknown) {
     // If JSON parse fails, try DSL format
     try {
