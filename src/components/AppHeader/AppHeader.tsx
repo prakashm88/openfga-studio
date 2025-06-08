@@ -5,7 +5,7 @@ import { StoreSelect } from '../StoreSelect/StoreSelect';
 
 interface AppHeaderProps {
   selectedStore: string;
-  onStoreChange: (storeId: string) => void;
+  onStoreChange: (storeId: string, storeName: string) => void;
   onToggleTheme: () => void;
 }
 
@@ -15,6 +15,9 @@ export const AppHeader = ({ selectedStore, onStoreChange, onToggleTheme }: AppHe
   return (
     <AppBar position="static" color="default" elevation={1}>
       <Toolbar>
+      <Box sx={{ display: 'flex', alignItems: 'center', mr: 2 }}>
+        <img src="/openfga.svg" alt="OpenFGA Logo" style={{ height: 32, marginRight: 8 }} />
+      </Box>
         <Typography variant="h6" component="div" sx={{ flexGrow: 0, mr: 4 }}>
           OpenFGA Playground
         </Typography>

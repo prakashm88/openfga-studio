@@ -95,14 +95,20 @@ export const OpenFGAService = {
       const response = await api.get(`/stores/${storeId}/authorization-models`);
       const latestModel = response.data.authorization_models[0];
       // Convert JSON model to DSL for display
-      return latestModel ? jsonToDsl(latestModel) : config.defaultAuthorizationModel;
+      return {
+        model: latestModel ? jsonToDsl(latestModel) : config.defaultAuthorizationModel,
+        modelId: latestModel?.id
+      };
     } catch (error) {
       console.error('Failed to get authorization model:', error);
-      return config.defaultAuthorizationModel;
+      return {
+        model: config.defaultAuthorizationModel,
+        modelId: undefined
+      };
     }
   },
 
-  async writeTuple(storeId: string, tuple: RelationshipTuple) {
+  async writeTuple(storeId: string, tuple: RelationshipTuple, authorizationModelId?: string) {
     const response = await api.post(`/stores/${storeId}/write`, {
       writes: {
         tuple_keys: [{
@@ -111,19 +117,14 @@ export const OpenFGAService = {
           object: tuple.object,
         }],
       },
+      ...(authorizationModelId && { authorization_model_id: authorizationModelId })
     });
     return response.data;
   },
 
   async listTuples(storeId: string): Promise<{ tuples: RelationshipTuple[] }> {
     try {
-      const response = await api.post(`/stores/${storeId}/read`, {
-        tuple_key: {
-          user: '*',
-          relation: '*',
-          object: '*'
-        }
-      });
+      const response = await api.post(`/stores/${storeId}/read`, {});
       return { tuples: response.data.tuples || [] };
     } catch (error) {
       console.error('Failed to list tuples:', error);
@@ -131,7 +132,7 @@ export const OpenFGAService = {
     }
   },
 
-  async check(storeId: string, query: RelationshipTuple): Promise<{ allowed: boolean }> {
+  async check(storeId: string, query: RelationshipTuple, authorizationModelId?: string): Promise<{ allowed: boolean }> {
     try {
       const response = await api.post(`/stores/${storeId}/check`, {
         tuple_key: {
@@ -139,6 +140,7 @@ export const OpenFGAService = {
           relation: query.relation,
           object: query.object,
         },
+        ...(authorizationModelId && { authorization_model_id: authorizationModelId })
       });
       return { allowed: response.data.allowed };
     } catch (error) {
@@ -146,4 +148,21 @@ export const OpenFGAService = {
       return { allowed: false };
     }
   },
+
+  async deleteTuple(storeId: string, tuple: RelationshipTuple): Promise<void> {
+    try {
+      await api.post(`/stores/${storeId}/write`, {
+        deletes: {
+          tuple_keys: [{
+            user: tuple.user,
+            relation: tuple.relation,
+            object: tuple.object,
+          }],
+        },
+      });
+    } catch (error) {
+      console.error('Failed to delete tuple:', error);
+      throw error;
+    }
+  }
 };

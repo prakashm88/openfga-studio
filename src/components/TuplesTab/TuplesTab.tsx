@@ -1,125 +1,214 @@
-import { useState, useEffect } from 'react';
-import { Box, Paper, Grid, Button, TextField, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Tabs, Tab } from '@mui/material';
-import { TupleEditor } from '../TupleEditor/TupleEditor';
-import { QueryRunner } from '../QueryRunner/QueryRunner';
+import { useState, useEffect, useMemo } from 'react';
+import { Box, Paper, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Autocomplete } from '@mui/material';
 import { OpenFGAService } from '../../services/OpenFGAService';
+import { extractRelationshipMetadata, type RelationshipMetadata } from '../../utils/tupleHelper';
 
 interface TuplesTabProps {
   storeId: string;
+  currentModel?: string;
+  authModelId: string;
 }
 
-interface SavedQuery {
-  timestamp: number;
-  query: { user: string; relation: string; object: string };
-}
-
-export const TuplesTab = ({ storeId }: TuplesTabProps) => {
+export const TuplesTab = ({ storeId, currentModel, authModelId }: TuplesTabProps) => {
   const [tuples, setTuples] = useState<Array<{ user: string; relation: string; object: string }>>([]);
-  const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
-  const [activeQueryTab, setActiveQueryTab] = useState(0);
+  const [metadata, setMetadata] = useState<RelationshipMetadata | undefined>();
+  
+  // Form state for inline tuple editor
+  const [selectedType, setSelectedType] = useState('');
+  const [user, setUser] = useState('');
+  const [relation, setRelation] = useState('');
+  const [object, setObject] = useState('');
 
+  // Available types from metadata
+  const availableTypes = useMemo(() => 
+    metadata ? Array.from(metadata.types.keys()) : [], 
+    [metadata]
+  );
+
+  // Available relations for the selected type
+  const availableRelations = useMemo(() => 
+    selectedType && metadata ? 
+      metadata.types.get(selectedType)?.relations || [] 
+      : [],
+    [selectedType, metadata]
+  );
+
+  // Available user types for the selected relation
+  const availableUserTypes = useMemo(() => 
+    selectedType && relation && metadata ? 
+      metadata.types.get(selectedType)?.userTypes.get(relation) || []
+      : [],
+    [selectedType, relation, metadata]
+  );
+
+  // Load tuples and metadata when store or model changes
   useEffect(() => {
-    loadTuples();
-    loadSavedQueries();
-  }, [storeId]);
+    const loadData = async () => {
+      try {
+        // Load tuples
+        const tuplesResponse = await OpenFGAService.listTuples(storeId);
+        setTuples(tuplesResponse.tuples);
 
-  const loadTuples = async () => {
+        // Extract metadata if we have a model
+        if (currentModel) {
+          const meta = extractRelationshipMetadata(currentModel);
+          setMetadata(meta);
+        }
+      } catch (error) {
+        console.error('Failed to load data:', error);
+      }
+    };
+
+    loadData();
+  }, [storeId, currentModel]);
+
+  const handleTupleSubmit = async () => {
     try {
+      const formattedObject = object.includes(':') ? object : `${selectedType}:${object}`;
+      const formattedUser = user.includes(':') || user.includes('#') ? 
+        user : `${availableUserTypes[0].split(':')[0]}:${user}`;
+
+      await OpenFGAService.writeTuple(storeId, {
+        user: formattedUser,
+        relation,
+        object: formattedObject
+      }, authModelId);
+
+      // Reset form
+      setSelectedType('');
+      setUser('');
+      setRelation('');
+      setObject('');
+
+      // Reload tuples
       const response = await OpenFGAService.listTuples(storeId);
       setTuples(response.tuples);
     } catch (error) {
-      console.error('Failed to load tuples:', error);
-    }
-  };
-
-  const loadSavedQueries = () => {
-    const saved = localStorage.getItem(`queries-${storeId}`);
-    if (saved) {
-      setSavedQueries(JSON.parse(saved));
-    }
-  };
-
-  const handleTupleSubmit = async (tuple: { user: string; relation: string; object: string }) => {
-    try {
-      await OpenFGAService.writeTuple(storeId, tuple);
-      await loadTuples();
-    } catch (error) {
       console.error('Failed to write tuple:', error);
     }
-  };
+  };  return (
+    <Box sx={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      gap: 2,
+      height: '100%',
+      width: '100%',
+      overflow: 'hidden',
+      p: 2
+    }}>
+      {/* Inline tuple editor */}
+      <Paper sx={{ p: 2, flexShrink: 0, width: '100%' }}>
+        <Box sx={{ 
+          display: 'flex', 
+          gap: 2, 
+          alignItems: 'flex-start',
+          flexWrap: 'wrap', // Allow wrapping on smaller screens
+          width: '100%'
+        }}>
+          <Autocomplete
+            size="small"
+            sx={{ width: 200 }}
+            value={selectedType}
+            onChange={(_, newValue) => {
+              setSelectedType(newValue || '');
+              setRelation('');
+              setObject('');
+            }}
+            options={availableTypes}
+            renderInput={(params) => <TextField {...params} label="Type" required />}
+          />
+          
+          <Autocomplete
+            size="small"
+            sx={{ width: 200 }}
+            value={relation}
+            onChange={(_, newValue) => {
+              setRelation(newValue || '');
+              setUser('');
+            }}
+            options={availableRelations}
+            disabled={!selectedType}
+            renderInput={(params) => <TextField {...params} label="Relation" required />}
+          />
+          
+          <Autocomplete
+            size="small"
+            sx={{ width: 200 }}
+            value={user}
+            onChange={(_, newValue) => setUser(newValue || '')}
+            options={availableUserTypes}
+            freeSolo
+            disabled={!relation}
+            renderInput={(params) => (
+              <TextField 
+                {...params} 
+                label="User" 
+                required
+                helperText="Enter value after type prefix"
+              />
+            )}
+          />
 
-  const handleQueryCheck = async (query: { user: string; relation: string; object: string }) => {
-    try {
-      const result = await OpenFGAService.check(storeId, query);
-      // Save query to history
-      const newQuery: SavedQuery = { timestamp: Date.now(), query };
-      const updatedQueries = [newQuery, ...savedQueries].slice(0, 10); // Keep last 10 queries
-      setSavedQueries(updatedQueries);
-      localStorage.setItem(`queries-${storeId}`, JSON.stringify(updatedQueries));
-      return result;
-    } catch (error) {
-      console.error('Failed to check relationship:', error);
-      return { allowed: false };
-    }
-  };
+          <TextField
+            size="small"
+            sx={{ width: 200 }}
+            label="Object Name"
+            value={object}
+            onChange={(e) => setObject(e.target.value)}
+            required
+            helperText={`Will be prefixed with '${selectedType}:'`}
+          />
 
-  return (
-    <Grid container spacing={2}>
-      <Grid item xs={6}>
-        <Paper sx={{ p: 2, mb: 2 }}>
-          <TupleEditor onSubmit={handleTupleSubmit} />
-        </Paper>
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>User</TableCell>
-                <TableCell>Relation</TableCell>
-                <TableCell>Object</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {tuples.map((tuple, index) => (
-                <TableRow key={index}>
-                  <TableCell>{tuple.user}</TableCell>
-                  <TableCell>{tuple.relation}</TableCell>
-                  <TableCell>{tuple.object}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Grid>
-      <Grid item xs={6}>
-        <Paper sx={{ p: 2 }}>
-          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-            <Tabs value={activeQueryTab} onChange={(_, newValue) => setActiveQueryTab(newValue)}>
-              <Tab label="Query Runner" />
-              <Tab label="History" />
-            </Tabs>
-          </Box>
-          {activeQueryTab === 0 ? (
-            <QueryRunner onCheck={handleQueryCheck} />
-          ) : (
-            <Box>
-              {savedQueries.map((saved, index) => (
-                <Box key={index} sx={{ mb: 2, p: 1, border: '1px solid #eee', borderRadius: 1 }}>
-                  <Box sx={{ mb: 1, color: 'text.secondary' }}>
-                    {new Date(saved.timestamp).toLocaleString()}
-                  </Box>
+          <Button 
+            variant="contained" 
+            onClick={handleTupleSubmit}
+            disabled={!selectedType || !relation || !user || !object}
+            sx={{ mt: 1 }}
+          >
+            Add Tuple
+          </Button>
+        </Box>
+      </Paper>
+
+      {/* Tuples table */}
+      <TableContainer component={Paper} sx={{ flex: 1, overflow: 'auto' }}>
+        <Table stickyHeader>
+          <TableHead>
+            <TableRow>
+              <TableCell>User</TableCell>
+              <TableCell>Relation</TableCell>
+              <TableCell>Object</TableCell>
+              <TableCell width={100} align="right">Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {tuples.map((tuple, index) => (
+              <TableRow key={index}>
+                <TableCell>{tuple.user}</TableCell>
+                <TableCell>{tuple.relation}</TableCell>
+                <TableCell>{tuple.object}</TableCell>
+                <TableCell align="right">
                   <Button
-                    variant="outlined"
                     size="small"
-                    onClick={() => handleQueryCheck(saved.query)}
+                    color="error"
+                    onClick={async () => {
+                      try {
+                        await OpenFGAService.deleteTuple(storeId, tuple);
+                        const response = await OpenFGAService.listTuples(storeId);
+                        setTuples(response.tuples);
+                      } catch (error) {
+                        console.error('Failed to delete tuple:', error);
+                      }
+                    }}
                   >
-                    {`${saved.query.user} ${saved.query.relation} ${saved.query.object}`}
+                    Delete
                   </Button>
-                </Box>
-              ))}
-            </Box>
-          )}
-        </Paper>
-      </Grid>
-    </Grid>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Box>
   );
 };

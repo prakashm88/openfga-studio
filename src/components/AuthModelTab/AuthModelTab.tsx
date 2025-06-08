@@ -13,11 +13,13 @@ import { applyNodeChanges, applyEdgeChanges } from 'reactflow';
 
 interface AuthModelTabProps {
   storeId: string;
+  storeName: string;
   initialModel: string;
+  authModelId: string;
   onModelUpdate: (model: string) => void;
 }
 
-export const AuthModelTab = ({ storeId, initialModel, onModelUpdate }: AuthModelTabProps) => {
+export const AuthModelTab = ({ storeId, storeName, initialModel, authModelId, onModelUpdate }: AuthModelTabProps) => {
   const [authModel, setAuthModel] = useState(initialModel);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
@@ -27,13 +29,13 @@ export const AuthModelTab = ({ storeId, initialModel, onModelUpdate }: AuthModel
   useEffect(() => {
     setAuthModel(initialModel);
     try {
-      const { nodes: initialNodes, edges: initialEdges } = parseAuthModelToGraph(initialModel);
+      const { nodes: initialNodes, edges: initialEdges } = parseAuthModelToGraph(initialModel, storeName);
       setNodes(initialNodes);
       setEdges(initialEdges);
     } catch (error) {
       console.error('Failed to parse initial auth model:', error);
     }
-  }, [initialModel]);
+  }, [initialModel, storeName]);
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     setNodes((nds) => applyNodeChanges(changes, nds));
@@ -46,7 +48,7 @@ export const AuthModelTab = ({ storeId, initialModel, onModelUpdate }: AuthModel
   const handleAuthModelChange = (value: string) => {
     setAuthModel(value);
     try {
-      const { nodes: newNodes, edges: newEdges } = parseAuthModelToGraph(value);
+      const { nodes: newNodes, edges: newEdges } = parseAuthModelToGraph(value, storeName);
       setNodes(newNodes);
       setEdges(newEdges);
     } catch (error) {

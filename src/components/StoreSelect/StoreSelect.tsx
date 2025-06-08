@@ -5,7 +5,7 @@ import { OpenFGAService } from '../../services/OpenFGAService';
 
 interface StoreSelectProps {
   selectedStore: string;
-  onStoreChange: (storeId: string) => void;
+  onStoreChange: (storeId: string, storeName: string) => void;
 }
 
 export const StoreSelect = ({ selectedStore, onStoreChange }: StoreSelectProps) => {
@@ -20,7 +20,8 @@ export const StoreSelect = ({ selectedStore, onStoreChange }: StoreSelectProps) 
       setStores(storesData.stores);
       // Only auto-select the first store if there's no selection and we have stores
       if (storesData.stores.length > 0 && !selectedStore) {
-        onStoreChange(storesData.stores[0].id);
+        const firstStore = storesData.stores[0];
+        onStoreChange(firstStore.id, firstStore.name);
       }
     } catch (error) {
       console.error('Failed to load stores:', error);
@@ -41,7 +42,7 @@ export const StoreSelect = ({ selectedStore, onStoreChange }: StoreSelectProps) 
       setNewStoreName('');
       // Refresh the stores list and select the new store
       await loadStores();
-      onStoreChange(store.id);
+      onStoreChange(store.id, store.name);
     } catch (error) {
       console.error('Failed to create store:', error);
     } finally {
@@ -53,7 +54,12 @@ export const StoreSelect = ({ selectedStore, onStoreChange }: StoreSelectProps) 
     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
       <Select
         value={selectedStore || ''}
-        onChange={(e) => onStoreChange(e.target.value)}
+        onChange={(e) => {
+          const store = stores.find(s => s.id === e.target.value);
+          if (store) {
+            onStoreChange(store.id, store.name);
+          }
+        }}
         size="small"
         sx={{ 
           minWidth: 200,
