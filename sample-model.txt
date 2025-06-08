@@ -16,6 +16,7 @@ type folder
     define owner: [user]
     define parent: [folder]
     define viewer: [user, user:*, group#member] or owner or viewer from parent
+    define tmpviewer: [user with non_expired_grant]
 
 type doc
   relations
@@ -27,17 +28,19 @@ type doc
     define viewer: [user, user:*, group#member]
     define can_write: owner or owner from parent
 
-
+condition non_expired_grant(current_time: timestamp, grant_time: timestamp, grant_duration: duration) {
+  current_time < grant_time + grant_duration
+}
 
 JSON format of DSL content:
 ---------------------------
-
 {
   "schema_version": "1.1",
   "type_definitions": [
     {
       "type": "user",
-      "relations": {}
+      "relations": {},
+      "metadata": null
     },
     {
       "type": "group",
@@ -63,7 +66,6 @@ JSON format of DSL content:
       "relations": {
         "can_create_file": {
           "computedUserset": {
-            "object": "",
             "relation": "owner"
           }
         },
@@ -81,24 +83,24 @@ JSON format of DSL content:
               },
               {
                 "computedUserset": {
-                  "object": "",
                   "relation": "owner"
                 }
               },
               {
                 "tupleToUserset": {
-                  "tupleset": {
-                    "object": "",
-                    "relation": "parent"
-                  },
                   "computedUserset": {
-                    "object": "",
                     "relation": "viewer"
+                  },
+                  "tupleset": {
+                    "relation": "parent"
                   }
                 }
               }
             ]
           }
+        },
+        "tmpviewer": {
+          "this": {}
         }
       },
       "metadata": {
@@ -134,6 +136,14 @@ JSON format of DSL content:
                 "relation": "member"
               }
             ]
+          },
+          "tmpviewer": {
+            "directly_related_user_types": [
+              {
+                "type": "user",
+                "condition": "non_expired_grant"
+              }
+            ]
           }
         }
       }
@@ -143,7 +153,6 @@ JSON format of DSL content:
       "relations": {
         "can_change_owner": {
           "computedUserset": {
-            "object": "",
             "relation": "owner"
           }
         },
@@ -158,25 +167,21 @@ JSON format of DSL content:
             "child": [
               {
                 "computedUserset": {
-                  "object": "",
                   "relation": "viewer"
                 }
               },
               {
                 "computedUserset": {
-                  "object": "",
                   "relation": "owner"
                 }
               },
               {
                 "tupleToUserset": {
-                  "tupleset": {
-                    "object": "",
-                    "relation": "parent"
-                  },
                   "computedUserset": {
-                    "object": "",
                     "relation": "viewer"
+                  },
+                  "tupleset": {
+                    "relation": "parent"
                   }
                 }
               }
@@ -188,19 +193,16 @@ JSON format of DSL content:
             "child": [
               {
                 "computedUserset": {
-                  "object": "",
                   "relation": "owner"
                 }
               },
               {
                 "tupleToUserset": {
-                  "tupleset": {
-                    "object": "",
-                    "relation": "parent"
-                  },
                   "computedUserset": {
-                    "object": "",
                     "relation": "owner"
+                  },
+                  "tupleset": {
+                    "relation": "parent"
                   }
                 }
               }
@@ -215,19 +217,16 @@ JSON format of DSL content:
             "child": [
               {
                 "computedUserset": {
-                  "object": "",
                   "relation": "owner"
                 }
               },
               {
                 "tupleToUserset": {
-                  "tupleset": {
-                    "object": "",
-                    "relation": "parent"
-                  },
                   "computedUserset": {
-                    "object": "",
                     "relation": "owner"
+                  },
+                  "tupleset": {
+                    "relation": "parent"
                   }
                 }
               }
@@ -281,5 +280,22 @@ JSON format of DSL content:
         }
       }
     }
-  ]
+  ],
+  "conditions": {
+    "non_expired_grant": {
+      "name": "non_expired_grant",
+      "expression": "current_time < grant_time + grant_duration",
+      "parameters": {
+        "current_time": {
+          "type_name": "TYPE_NAME_TIMESTAMP"
+        },
+        "grant_time": {
+          "type_name": "TYPE_NAME_TIMESTAMP"
+        },
+        "grant_duration": {
+          "type_name": "TYPE_NAME_DURATION"
+        }
+      }
+    }
+  }
 }

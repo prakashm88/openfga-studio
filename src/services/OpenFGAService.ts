@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { config } from '../config';
-import { dslToJson, jsonToDsl, type OpenFGAModel } from '../utils/modelConverter';
+import { dslToJson, jsonToDsl } from '../utils/modelConverter';
+import type { OpenFGAModel } from '../types/models';
 
 interface OpenFGAError {
   message: string;
@@ -56,10 +57,16 @@ export const OpenFGAService = {
   },
 
   async createStore(name: string) {
+    // Create the store first
     const response = await api.post('/stores', {
       name: name,
       description: 'OpenFGA Playground Store'
     });
+    
+    // Immediately write our default authorization model to the new store
+    const storeId = response.data.id;
+    await this.writeAuthorizationModel(storeId, config.defaultAuthorizationModel);
+    
     return response.data;
   },
 

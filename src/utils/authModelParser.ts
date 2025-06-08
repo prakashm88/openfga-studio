@@ -1,39 +1,27 @@
 import { type Node, type Edge, MarkerType } from 'reactflow';
+import type { AuthModel, OpenFGAModel, TypeDefinition } from '../types/models';
 
-interface RelationType {
-  name: string;
-  definition: string;
-}
-
-interface TypeDefinition {
-  name: string;
-  relations: RelationType[];
-}
-
-export interface AuthModel {
-  schemaVersion: string;
-  typeDefinitions: TypeDefinition[];
-}
-
-interface OpenFGARelation {
-  this?: Record<string, never>;
-  computedUserset?: {
-    object: string;
-    relation: string;
-  };
-  union?: {
-    child: Array<unknown>;
-  };
-}
-
-interface OpenFGAType {
-  type: string;
-  relations?: Record<string, OpenFGARelation>;
-}
-
-interface OpenFGAModel {
-  schema_version: string;
-  type_definitions: OpenFGAType[];
+function splitDefinitions(definition: string): string[] {
+  const parts: string[] = [];
+  let currentPart = '';
+  let bracketCount = 0;
+  
+  for (let i = 0; i < definition.length; i++) {
+    const char = definition[i];
+    if (char === '[') bracketCount++;
+    if (char === ']') bracketCount--;
+    
+    if (bracketCount === 0 && i >= 2 && definition.slice(i - 2, i + 1) === ' or') {
+      // Remove the trailing 'o' if it exists
+      parts.push(currentPart.slice(0, -1).trim());
+      currentPart = '';
+      i++; // Skip the 'r' in 'or'
+    } else {
+      currentPart += char;
+    }
+  }
+  if (currentPart) parts.push(currentPart.trim());
+  return parts.length ? parts : [definition.trim()];
 }
 
 function parseDSL(dsl: string): AuthModel {
@@ -54,8 +42,9 @@ function parseDSL(dsl: string): AuthModel {
     // If JSON parse fails, treat it as DSL format
     const lines = dsl.split('\n').map(line => line.trim()).filter(line => line.length > 0);
     const model: AuthModel = {
-      schemaVersion: '1.1',
-      typeDefinitions: []
+      schemaVersion: "1.1",
+      typeDefinitions: [],
+      conditions: [],
     };
 
     let currentType: TypeDefinition | null = null;
@@ -66,6 +55,17 @@ function parseDSL(dsl: string): AuthModel {
         model.schemaVersion = line.split(' ')[1];
         continue;
       }
+      if (line.startsWith("condition ")) {
+        const conditionMatch = line.match(/condition\s+(\w+)\s*\((.*?)\)\s*{(.*?)}/);
+        if (conditionMatch) {
+          const [, name, parameters, expression] = conditionMatch;
+          model.conditions?.push({
+            name,
+            parameters,
+            expression: expression.trim(),
+          });
+        }
+      }
       if (line.startsWith('type ')) {
         if (currentType) {
           model.typeDefinitions.push(currentType);
@@ -75,10 +75,12 @@ function parseDSL(dsl: string): AuthModel {
           relations: []
         };
       } else if (line.startsWith('define ') && currentType) {
-        const relationParts = line.split(':');
-        const name = relationParts[0].replace('define ', '').trim();
-        const definition = relationParts[1].trim();
-        currentType.relations.push({ name, definition });
+        const colonIndex = line.indexOf(':');
+        if (colonIndex !== -1) {
+          const name = line.substring(7, colonIndex).trim();
+          const definition = line.substring(colonIndex + 1).trim();
+          currentType.relations.push({ name, definition });
+        }
       }
     }
 
@@ -91,34 +93,32 @@ function parseDSL(dsl: string): AuthModel {
 }
 
 const LAYOUT_CONFIG = {
-  // Base positioning
-  ROOT_X: 100,         // Increased starting X position
-  ROOT_Y: 80,          // Increased starting Y position
-  
-  // Spacing configuration
-  LEVEL_SPACING_X: 600,    // More horizontal space between levels
-  SIBLING_SPACING_Y: 220,  // Significantly more vertical space between siblings
-  NODE_GROUP_SPACING: 180, // More space between groups
-  INDENTATION: 200,       // Deeper indentation for better hierarchy visualization
-  
-  // Node sizing (slightly larger for better readability)
+  ROOT_X: 100,
+  ROOT_Y: 80,
+  LEVEL_SPACING_X: 600,
+  SIBLING_SPACING_Y: 220,
+  NODE_GROUP_SPACING: 180,
+  INDENTATION: 200,
   NODE_WIDTH: {
     TYPE: 160,
     RELATION: 180,
     DEFINITION: 240
   },
   NODE_HEIGHT: 50,
-  
-  // Visual adjustments
-  PADDING: 60,            // More padding for better spacing
-  
-  // Colors
+  PADDING: 60,
   COLORS: {
     TYPE_EDGE: '#2684ff',
     RELATION_EDGE: '#4caf50',
-    DEFINITION_EDGE: '#ff9800'
-  }
-} as const;
+    DEFINITION_EDGE: '#ff9800',
+    CONDITION_EDGE: '#ff9800'
+  },
+  LEGEND: [
+    { label: 'Type', color: '#2684ff' },
+    { label: 'Relation', color: '#4caf50' },
+    { label: 'Definition', color: '#ff9800' },
+    { label: 'Condition', color: '#ff9800' }
+  ]
+};
 
 export function parseAuthModelToGraph(dslContent: string): { nodes: Node[]; edges: Edge[] } {
   try {
@@ -126,22 +126,6 @@ export function parseAuthModelToGraph(dslContent: string): { nodes: Node[]; edge
     const nodes: Node[] = [];
     const edges: Edge[] = [];
     let nodeId = 1;
-    
-    // Calculate total height needed per type
-    const typeHeights: Record<number, number> = {};
-    model.typeDefinitions.forEach((typeDef, index) => {
-      // Base height for type node
-      let height = LAYOUT_CONFIG.NODE_HEIGHT + LAYOUT_CONFIG.PADDING;
-      
-      // Add height for each relation and its definitions
-      typeDef.relations.forEach(relation => {
-        height += LAYOUT_CONFIG.SIBLING_SPACING_Y; // Space for relation
-        const defCount = relation.definition.split(' or ').length;
-        height += defCount * (LAYOUT_CONFIG.SIBLING_SPACING_Y / 2); // Space for definitions
-      });
-      
-      typeHeights[index] = height;
-    });
     
     // Add root node
     const rootNodeId = 'root';
@@ -158,13 +142,12 @@ export function parseAuthModelToGraph(dslContent: string): { nodes: Node[]; edge
 
     let maxY = LAYOUT_CONFIG.ROOT_Y;
 
-    // Layout main type nodes horizontally with better vertical distribution
+    // Layout type nodes
     model.typeDefinitions.forEach((typeDef, typeIndex) => {
       const typeNodeId = `type-${nodeId++}`;
       const typeX = LAYOUT_CONFIG.ROOT_X + ((typeIndex + 1) * LAYOUT_CONFIG.LEVEL_SPACING_X);
       const typeY = LAYOUT_CONFIG.ROOT_Y + LAYOUT_CONFIG.NODE_GROUP_SPACING;
       
-      // Add type node
       nodes.push({
         id: typeNodeId,
         data: { 
@@ -176,25 +159,23 @@ export function parseAuthModelToGraph(dslContent: string): { nodes: Node[]; edge
         style: { width: LAYOUT_CONFIG.NODE_WIDTH.TYPE }
       });
 
-      // Connect to root with smoothstep edge
       edges.push({
         id: `edge-root-${typeNodeId}`,
         source: rootNodeId,
         target: typeNodeId,
+        targetHandle: `type-${typeDef.name}`,
         type: 'smoothstep',
         animated: true,
         style: { stroke: LAYOUT_CONFIG.COLORS.TYPE_EDGE }
       });
 
-      // Track vertical position for the current type's nodes
       let currentY = typeY + LAYOUT_CONFIG.NODE_GROUP_SPACING;
 
-      // Process relations vertically under each type
+      // Process relations
       typeDef.relations.forEach((relation) => {
         const relationNodeId = `relation-${nodeId++}`;
-        
-        // Position relation node
         currentY += LAYOUT_CONFIG.SIBLING_SPACING_Y;
+        
         nodes.push({
           id: relationNodeId,
           data: { 
@@ -209,7 +190,6 @@ export function parseAuthModelToGraph(dslContent: string): { nodes: Node[]; edge
           style: { width: LAYOUT_CONFIG.NODE_WIDTH.RELATION }
         });
 
-        // Connect type to relation
         edges.push({
           id: `edge-${typeNodeId}-${relationNodeId}`,
           source: typeNodeId,
@@ -227,31 +207,32 @@ export function parseAuthModelToGraph(dslContent: string): { nodes: Node[]; edge
           }
         });
 
-        // Process relation definitions with better spacing
-        const parts = relation.definition.split(' or ');
-        parts.forEach(part => {
-          const cleanPart = part.trim();
+        // Process definitions
+        const definitions = splitDefinitions(relation.definition);
+        definitions.forEach(def => {
+          const cleanDef = def.trim();
           const definitionNodeId = `def-${nodeId++}`;
-          
-          // Calculate Y position with proportional spacing
           currentY += LAYOUT_CONFIG.SIBLING_SPACING_Y / 2;
 
-          // Add definition node
+          const hasCondition = cleanDef.includes(' with ');
+          
           nodes.push({
             id: definitionNodeId,
             data: { 
-              label: cleanPart,
-              type: 'definition'
+              label: cleanDef,
+              type: hasCondition ? 'condition' : 'definition'
             },
             position: { 
               x: typeX + LAYOUT_CONFIG.INDENTATION * 2,
               y: currentY
             },
             type: 'default',
-            style: { width: LAYOUT_CONFIG.NODE_WIDTH.DEFINITION }
+            style: { 
+              width: LAYOUT_CONFIG.NODE_WIDTH.DEFINITION,
+              ...(hasCondition && { border: '2px solid #ff9800' })
+            }
           });
 
-          // Connect relation to definition
           edges.push({
             id: `edge-${relationNodeId}-${definitionNodeId}`,
             source: relationNodeId,
@@ -270,11 +251,9 @@ export function parseAuthModelToGraph(dslContent: string): { nodes: Node[]; edge
           });
         });
 
-        // Add some extra space after the last definition
         currentY += LAYOUT_CONFIG.SIBLING_SPACING_Y / 2;
       });
 
-      // Update maxY for overall graph height
       maxY = Math.max(maxY, currentY);
     });
 

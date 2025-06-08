@@ -112,7 +112,7 @@ export const AuthModelTab = ({ storeId, initialModel, onModelUpdate }: AuthModel
                 startIcon={<FileDownloadIcon />}
                 onClick={handleDownloadJSON}
               >
-                Download JSON
+              JSON
               </Button>
             </Box>
           </Box>
