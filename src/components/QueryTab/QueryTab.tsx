@@ -18,7 +18,7 @@ interface SavedQuery {
 
 export const QueryTab = ({ storeId, currentModel, authModelId }: QueryTabProps) => {
   const [metadata, setMetadata] = useState<RelationshipMetadata>();
-  const [queryMode, setQueryMode] = useState<'form' | 'text'>('text');
+  const [queryMode, setQueryMode] = useState<'form' | 'text'>('form');
   const [selectedType, setSelectedType] = useState('');
   const [selectedObjectType, setSelectedObjectType] = useState('');
   const [user, setUser] = useState('');
@@ -36,19 +36,23 @@ export const QueryTab = ({ storeId, currentModel, authModelId }: QueryTabProps) 
     [metadata]
   );
 
-  // Available relations for the selected object type
+  // Available relations based on the selected object type and user type
   const availableRelations = useMemo(() => {
-    if (!selectedType || !metadata) return [];
+    if (!selectedObjectType || !metadata || !selectedType) return [];
     
     // Get the object type metadata
-    const objectTypeMetadata = metadata.types.get(selectedType);
+    const objectTypeMetadata = metadata.types.get(selectedObjectType);
     if (!objectTypeMetadata) return [];
     
-    // Get all valid relations for the type
-    const relations = objectTypeMetadata.relations;
+    // Get all relations that accept the selected user type
+    const relations = objectTypeMetadata.relations.filter(relationName => {
+      const userTypes = objectTypeMetadata.userTypes.get(relationName) || [];
+      // Check if this relation accepts the selected user type
+      return userTypes.some(type => type.startsWith(selectedType) || type === selectedType);
+    });
 
     return relations;
-  }, [selectedType, metadata]);
+  }, [selectedType, selectedObjectType, metadata]);
 
   // Available user types for the selected relation
   const availableUserTypes = useMemo(() => 
@@ -108,7 +112,7 @@ export const QueryTab = ({ storeId, currentModel, authModelId }: QueryTabProps) 
   };
 
   const handleQueryCheckForm = async () => {
-    if (!selectedType || !relation || !user || !object) {
+    if (!selectedType || !selectedObjectType || !relation || !user || !object) {
       setError('Please fill in all fields');
       return;
     }
@@ -116,7 +120,7 @@ export const QueryTab = ({ storeId, currentModel, authModelId }: QueryTabProps) 
     setError(null);
     setIsSubmitting(true);
     try {
-      const formattedObject = formatTupleObject(object, selectedType);
+      const formattedObject = formatTupleObject(object, selectedObjectType);
       const formattedUser = formatTupleUser(user, availableUserTypes[0]?.split(':')[0]);
 
       const query = {
@@ -330,7 +334,7 @@ export const QueryTab = ({ storeId, currentModel, authModelId }: QueryTabProps) 
                     onChange={(_, newValue) => setRelation(newValue || '')}
                     options={availableRelations}
                     renderInput={(params) => <TextField {...params} label="Relation" required />}
-                    disabled={!selectedObjectType}
+                    disabled={!selectedType || !selectedObjectType || availableRelations.length === 0}
                   />
                 </Box>
                  
