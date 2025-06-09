@@ -612,7 +612,7 @@ export const QueryTab = ({
             {/* Result Snackbar */}
             <Snackbar
               open={snackbar.open}
-              autoHideDuration={4000}
+              autoHideDuration={10000}
               onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
               anchorOrigin={{ vertical: "top", horizontal: "right" }}
             >
