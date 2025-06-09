@@ -16,6 +16,10 @@ interface RelationshipTuple {
   user: string;
   relation: string;
   object: string;
+  condition?: {
+    name: string;
+    context: Record<string, string | number | boolean>;
+  };
 }
 
 export class OpenFGAService {
@@ -145,6 +149,7 @@ export class OpenFGAService {
           relation: query.relation,
           object: query.object
         },
+        context: query.condition?.context,
         ...(authorizationModelId && { authorization_model_id: authorizationModelId })
       });
       return { allowed: response.data.allowed };
