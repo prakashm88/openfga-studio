@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { Box, Paper, Button, IconButton } from '@mui/material';
+import { Box, Paper, Button, IconButton, Snackbar, Alert } from '@mui/material';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
@@ -13,27 +13,34 @@ import { applyNodeChanges, applyEdgeChanges } from 'reactflow';
 
 interface AuthModelTabProps {
   storeId: string;
+  storeName: string;
   initialModel: string;
+  authModelId: string;
   onModelUpdate: (model: string) => void;
 }
 
-export const AuthModelTab = ({ storeId, initialModel, onModelUpdate }: AuthModelTabProps) => {
+export const AuthModelTab = ({ storeId, storeName, initialModel, authModelId, onModelUpdate }: AuthModelTabProps) => {
   const [authModel, setAuthModel] = useState(initialModel);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [leftPanelExpanded, setLeftPanelExpanded] = useState(true);
   const [rightPanelExpanded, setRightPanelExpanded] = useState(true);
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error';
+  }>({ open: false, message: '', severity: 'success' });
 
   useEffect(() => {
     setAuthModel(initialModel);
     try {
-      const { nodes: initialNodes, edges: initialEdges } = parseAuthModelToGraph(initialModel);
+      const { nodes: initialNodes, edges: initialEdges } = parseAuthModelToGraph(initialModel, storeName);
       setNodes(initialNodes);
       setEdges(initialEdges);
     } catch (error) {
       console.error('Failed to parse initial auth model:', error);
     }
-  }, [initialModel]);
+  }, [initialModel, storeName]);
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     setNodes((nds) => applyNodeChanges(changes, nds));
@@ -46,7 +53,7 @@ export const AuthModelTab = ({ storeId, initialModel, onModelUpdate }: AuthModel
   const handleAuthModelChange = (value: string) => {
     setAuthModel(value);
     try {
-      const { nodes: newNodes, edges: newEdges } = parseAuthModelToGraph(value);
+      const { nodes: newNodes, edges: newEdges } = parseAuthModelToGraph(value, storeName);
       setNodes(newNodes);
       setEdges(newEdges);
     } catch (error) {
@@ -58,8 +65,18 @@ export const AuthModelTab = ({ storeId, initialModel, onModelUpdate }: AuthModel
     try {
       await OpenFGAService.writeAuthorizationModel(storeId, authModel);
       onModelUpdate(authModel);
+      setSnackbar({
+        open: true,
+        message: 'Authorization model saved successfully',
+        severity: 'success'
+      });
     } catch (error) {
       console.error('Failed to save authorization model:', error);
+      setSnackbar({
+        open: true,
+        message: error instanceof Error ? error.message : 'Failed to save authorization model',
+        severity: 'error'
+      });
     }
   };
 
@@ -168,6 +185,21 @@ export const AuthModelTab = ({ storeId, initialModel, onModelUpdate }: AuthModel
       >
         {rightPanelExpanded ? <ChevronRightIcon /> : <ChevronLeftIcon />}
       </IconButton>
+      <Snackbar 
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Alert 
+          onClose={() => setSnackbar(prev => ({ ...prev, open: false }))} 
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

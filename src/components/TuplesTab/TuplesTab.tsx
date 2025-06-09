@@ -1,125 +1,525 @@
-import { useState, useEffect } from 'react';
-import { Box, Paper, Grid, Button, TextField, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Tabs, Tab } from '@mui/material';
-import { TupleEditor } from '../TupleEditor/TupleEditor';
-import { QueryRunner } from '../QueryRunner/QueryRunner';
+import { useState, useEffect, useMemo } from 'react';
+import { 
+  Box, 
+  Paper, 
+  Button, 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableContainer, 
+  TableHead, 
+  TableRow, 
+  TextField, 
+  Autocomplete,
+  Alert, 
+  Snackbar,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
+  Slide,
+  alpha,
+  type SlideProps
+} from '@mui/material';
 import { OpenFGAService } from '../../services/OpenFGAService';
+import { extractRelationshipMetadata, type RelationshipMetadata } from '../../utils/tupleHelper';
 
 interface TuplesTabProps {
   storeId: string;
+  currentModel?: string;
+  authModelId: string;
 }
 
-interface SavedQuery {
-  timestamp: number;
-  query: { user: string; relation: string; object: string };
+interface ApiError extends Error {
+  response?: {
+    data?: {
+      message?: string;
+      code?: string;
+    };
+  };
 }
 
-export const TuplesTab = ({ storeId }: TuplesTabProps) => {
+// Slide transition component for the error toast
+function SlideTransition(props: SlideProps) {
+  return <Slide {...props} direction="left" />;
+}
+
+export const TuplesTab = ({ storeId, currentModel, authModelId }: TuplesTabProps) => {
   const [tuples, setTuples] = useState<Array<{ user: string; relation: string; object: string }>>([]);
-  const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
-  const [activeQueryTab, setActiveQueryTab] = useState(0);
+  const [metadata, setMetadata] = useState<RelationshipMetadata | undefined>();
+  const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<'assisted' | 'freeform'>('assisted');
+  const [loading, setLoading] = useState(false);
+  
+  // Form state for freeform mode
+  const [freeformUser, setFreeformUser] = useState('');
+  const [freeformRelation, setFreeformRelation] = useState('');
+  const [freeformObject, setFreeformObject] = useState('');
+  
+  // Form state for assisted mode
+  const [selectedType, setSelectedType] = useState('');
+  const [user, setUser] = useState('');
+  const [relation, setRelation] = useState('');
+  const [object, setObject] = useState('');
+  const [selectedObjectType, setSelectedObjectType] = useState('');
 
+  // Available types from metadata
+  const availableTypes = useMemo(() => 
+    metadata ? Array.from(metadata.types.keys()) : [], 
+    [metadata]
+  );
+
+  // Get possible target object types based on the model
+  const possibleObjectTypes = useMemo(() => {
+    if (!metadata) return [];
+    return Array.from(metadata.types.keys()).filter(type => 
+      // Filter types that have relationships defined
+      metadata.types.get(type)?.relations && 
+      Object.keys(metadata.types.get(type)?.relations || {}).length > 0
+    );
+  }, [metadata]);
+
+  // Available relations based on the selected object type and user type
+  const availableRelations = useMemo(() => {
+    if (!selectedObjectType || !metadata) return [];
+    
+    // Get the object type metadata
+    const objectTypeMetadata = metadata.types.get(selectedObjectType);
+    if (!objectTypeMetadata) return [];
+    
+    // Get all relations that accept the selected user type
+    const relations = objectTypeMetadata.relations.filter(relationName => {
+      const userTypes = objectTypeMetadata.userTypes.get(relationName) || [];
+      // Check if this relation accepts the selected user type
+      return userTypes.some(type => type.startsWith(selectedType));
+    });
+
+    return relations.map(relation => ({
+      id: relation,
+      label: relation
+    }));
+  }, [selectedType, selectedObjectType, metadata]);
+
+  // Update relation when object type or user type changes
   useEffect(() => {
-    loadTuples();
-    loadSavedQueries();
-  }, [storeId]);
+    setRelation(''); // Clear previous relation when types change
+  }, [selectedType, selectedObjectType]);
 
-  const loadTuples = async () => {
+  // Load initial data
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        const tuplesResponse = await OpenFGAService.listTuples(storeId);
+        setTuples(tuplesResponse.tuples);
+
+        if (currentModel) {
+          const meta = extractRelationshipMetadata(currentModel);
+          setMetadata(meta);
+        }
+      } catch (error) {
+        console.error('Failed to load data:', error);
+        setError('Failed to load tuples. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [storeId, currentModel]);
+
+  const handleAssistedSubmit = async () => {
     try {
+      setError(null);
+      setLoading(true);
+
+      const formattedUser = user.includes(':') ? user : `${selectedType}:${user}`;
+      const formattedObject = object.includes(':') ? object : `${selectedObjectType}:${object}`;
+
+      await OpenFGAService.writeTuple(storeId, {
+        user: formattedUser,
+        relation,
+        object: formattedObject
+      }, authModelId);
+
+      // Reset form
+      setSelectedType('');
+      setUser('');
+      setRelation('');
+      setObject('');
+      setSelectedObjectType('');
+
+      // Reload tuples
       const response = await OpenFGAService.listTuples(storeId);
       setTuples(response.tuples);
-    } catch (error) {
-      console.error('Failed to load tuples:', error);
-    }
-  };
 
-  const loadSavedQueries = () => {
-    const saved = localStorage.getItem(`queries-${storeId}`);
-    if (saved) {
-      setSavedQueries(JSON.parse(saved));
-    }
-  };
-
-  const handleTupleSubmit = async (tuple: { user: string; relation: string; object: string }) => {
-    try {
-      await OpenFGAService.writeTuple(storeId, tuple);
-      await loadTuples();
+      setError(`Successfully added tuple: ${formattedUser} ${relation} ${formattedObject}`);
     } catch (error) {
       console.error('Failed to write tuple:', error);
+      const apiError = error as ApiError;
+      const errorMessage = apiError.response?.data?.message || apiError.message || 'Failed to add tuple';
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleQueryCheck = async (query: { user: string; relation: string; object: string }) => {
+  const handleFreeformSubmit = async () => {
     try {
-      const result = await OpenFGAService.check(storeId, query);
-      // Save query to history
-      const newQuery: SavedQuery = { timestamp: Date.now(), query };
-      const updatedQueries = [newQuery, ...savedQueries].slice(0, 10); // Keep last 10 queries
-      setSavedQueries(updatedQueries);
-      localStorage.setItem(`queries-${storeId}`, JSON.stringify(updatedQueries));
-      return result;
+      setError(null);
+      setLoading(true);
+
+      await OpenFGAService.writeTuple(storeId, {
+        user: freeformUser,
+        relation: freeformRelation,
+        object: freeformObject
+      }, authModelId);
+
+      // Reset form
+      setFreeformUser('');
+      setFreeformRelation('');
+      setFreeformObject('');
+
+      // Reload tuples
+      const response = await OpenFGAService.listTuples(storeId);
+      setTuples(response.tuples);
+
+      setError(`Successfully added tuple: ${freeformUser} ${freeformRelation} ${freeformObject}`);
     } catch (error) {
-      console.error('Failed to check relationship:', error);
-      return { allowed: false };
+      console.error('Failed to write tuple:', error);
+      setError(error instanceof Error ? error.message : 'Failed to add tuple');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <Grid container spacing={2}>
-      <Grid item xs={6}>
-        <Paper sx={{ p: 2, mb: 2 }}>
-          <TupleEditor onSubmit={handleTupleSubmit} />
-        </Paper>
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>User</TableCell>
-                <TableCell>Relation</TableCell>
-                <TableCell>Object</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {tuples.map((tuple, index) => (
-                <TableRow key={index}>
-                  <TableCell>{tuple.user}</TableCell>
-                  <TableCell>{tuple.relation}</TableCell>
-                  <TableCell>{tuple.object}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Grid>
-      <Grid item xs={6}>
-        <Paper sx={{ p: 2 }}>
-          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-            <Tabs value={activeQueryTab} onChange={(_, newValue) => setActiveQueryTab(newValue)}>
-              <Tab label="Query Runner" />
-              <Tab label="History" />
-            </Tabs>
+    <Box sx={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      height: '100%'
+    }}>
+      {/* Header Section */}
+      <Box sx={{ 
+        bgcolor: 'background.paper',
+        p: 2,
+        borderBottom: 1,
+        borderColor: 'divider'
+      }}>
+        <Typography variant="h6" fontSize={18} fontWeight={"bold"}>
+          Add Tuples
+        </Typography>
+      </Box>
+
+      {/* Content Section */}
+      <Box sx={{ p: 2, flex: 1, overflow: 'auto' }}>
+        {/* Mode selector and form */}
+        <Paper variant="outlined" sx={{ mb: 2, borderRadius: 1 }}>
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 1,
+            px: 2,
+            py: 1.5,
+            borderBottom: 1,
+            borderColor: 'divider',
+            bgcolor: 'background.default'
+          }}>
+            <Typography fontSize={14}>Mode:</Typography>
+            <ToggleButtonGroup
+              value={mode}
+              exclusive
+              onChange={(_, newMode) => newMode && setMode(newMode)}
+              size="small"
+              sx={{
+                '& .MuiToggleButton-root': {
+                  px: 2,
+                  bgcolor: 'action.hover',
+                  '&.Mui-selected': {
+                    bgcolor: 'primary.main',
+                    color: 'primary.contrastText',
+                    '&:hover': {
+                      bgcolor: 'primary.dark'
+                    }
+                  }
+                }
+              }}
+            >
+              <ToggleButton value="assisted" sx={{ textTransform: 'uppercase', fontSize: 13 }}>
+                Assisted
+              </ToggleButton>
+              <ToggleButton value="freeform" sx={{ textTransform: 'uppercase', fontSize: 13 }}>
+                Freeform
+              </ToggleButton>
+            </ToggleButtonGroup>
           </Box>
-          {activeQueryTab === 0 ? (
-            <QueryRunner onCheck={handleQueryCheck} />
-          ) : (
-            <Box>
-              {savedQueries.map((saved, index) => (
-                <Box key={index} sx={{ mb: 2, p: 1, border: '1px solid #eee', borderRadius: 1 }}>
-                  <Box sx={{ mb: 1, color: 'text.secondary' }}>
-                    {new Date(saved.timestamp).toLocaleString()}
-                  </Box>
-                  <Button
-                    variant="outlined"
+
+          <Box sx={{ p: 3, bgcolor: 'background.paper' }}>
+            {mode === 'freeform' ? (
+              // Freeform mode
+              <Box sx={{ 
+                display: 'flex', 
+                gap: 2, 
+                alignItems: 'flex-start',
+                flexWrap: 'wrap',
+                width: '100%'
+              }}>
+                <TextField
+                  size="small"
+                  sx={{ width: 250 }}
+                  label="User"
+                  value={freeformUser}
+                  onChange={(e) => setFreeformUser(e.target.value)}
+                  required
+                  helperText="Format: type:id or type#relation@id"
+                />
+                
+                <TextField
+                  size="small"
+                  sx={{ width: 250 }}
+                  label="Relation"
+                  value={freeformRelation}
+                  onChange={(e) => setFreeformRelation(e.target.value)}
+                  required
+                />
+
+                <TextField
+                  size="small"
+                  sx={{ width: 250 }}
+                  label="Object"
+                  value={freeformObject}
+                  onChange={(e) => setFreeformObject(e.target.value)}
+                  required
+                  helperText="Format: type:id"
+                />
+
+                <Button 
+                  variant="contained" 
+                  onClick={handleFreeformSubmit}
+                  disabled={loading || !freeformUser || !freeformRelation || !freeformObject}
+                >
+                  {loading ? 'Adding...' : 'Add Tuple'}
+                </Button>
+              </Box>
+            ) : (
+              // Assisted mode
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, width: '100%' }}>
+                {/* First row - User information */}
+                <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                  <Autocomplete
                     size="small"
-                    onClick={() => handleQueryCheck(saved.query)}
-                  >
-                    {`${saved.query.user} ${saved.query.relation} ${saved.query.object}`}
-                  </Button>
+                    sx={{ width: 250 }}
+                    value={selectedType}
+                    onChange={(_, newValue) => {
+                      setSelectedType(newValue || '');
+                      setRelation('');
+                    }}
+                    options={availableTypes}
+                    renderInput={(params) => <TextField {...params} label="User Type" required />}
+                  />
+                  
+                  <TextField
+                    size="small"
+                    sx={{ width: 250 }}
+                    label="User Name"
+                    value={user}
+                    onChange={(e) => setUser(e.target.value)}
+                    required
+                    helperText={`Will be prefixed with '${selectedType}:'`}
+                  />
                 </Box>
-              ))}
-            </Box>
-          )}
+
+                {/* Second row - Object information */}
+                <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                  <Autocomplete
+                    size="small"
+                    sx={{ width: 250 }}
+                    value={selectedObjectType}
+                    onChange={(_, newValue) => setSelectedObjectType(newValue || '')}
+                    options={possibleObjectTypes}
+                    renderInput={(params) => <TextField {...params} label="Object Type" required />}
+                  />
+                  
+                  <TextField
+                    size="small"
+                    sx={{ width: 250 }}
+                    label="Object Name"
+                    value={object}
+                    onChange={(e) => setObject(e.target.value)}
+                    required
+                    helperText={`Will be prefixed with '${selectedObjectType}:'`}
+                  />
+                </Box>
+
+                {/* Third row - Relation */}
+                <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                  <Autocomplete
+                    size="small"
+                    sx={{ width: 350 }}
+                    value={relation}
+                    onChange={(_, newValue) => {
+                      const actualRelation = typeof newValue === 'string' ? newValue : newValue?.id;
+                      setRelation(actualRelation || '');
+                    }}
+                    options={availableRelations}
+                    getOptionLabel={(option) => {
+                      if (typeof option === 'string') return option;
+                      return option.label;
+                    }}
+                    freeSolo
+                    disabled={!selectedType}
+                    renderInput={(params) => (
+                      <TextField {...params} label="Relation" required />
+                    )}
+                  />
+                </Box>
+
+                {/* Fourth row - Tuple preview and submit button */}
+                <Paper variant="outlined" sx={{ 
+                  p: 2,
+                  bgcolor: 'action.hover',
+                  borderColor: 'divider'
+                }}>
+                  <Box sx={{ 
+                    display: 'flex', 
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 2
+                  }}>
+                    <Box sx={{ 
+                      flex: 1,
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      alignItems: 'center',
+                      gap: 0.5,
+                      fontSize: '0.9rem',
+                      fontFamily: '"Roboto Mono", monospace'
+                    }}>
+                      <Typography component="span" color="text.secondary">A user</Typography>
+                      <Typography 
+                        component="span" 
+                        sx={{ 
+                          color: 'primary.main',
+                          bgcolor: alpha('#1976d2', 0.1),
+                          px: 1,
+                          py: 0.5,
+                          borderRadius: 1
+                        }}
+                      >
+                        {selectedType && user ? `${selectedType}:${user}` : '<user>'}
+                      </Typography>
+
+                      <Typography component="span" color="text.secondary">can act on</Typography>
+                      <Typography 
+                        component="span" 
+                        sx={{ 
+                          color: 'secondary.main',
+                          bgcolor: alpha('#9c27b0', 0.1),
+                          px: 1,
+                          py: 0.5,
+                          borderRadius: 1
+                        }}
+                      >
+                        {selectedObjectType && object ? `${selectedObjectType}:${object}` : '<object>'}
+                      </Typography>
+
+                      <Typography component="span" color="text.secondary">as a</Typography>
+                      <Typography 
+                        component="span" 
+                        sx={{ 
+                          color: 'success.main',
+                          bgcolor: alpha('#2e7d32', 0.1),
+                          px: 1,
+                          py: 0.5,
+                          borderRadius: 1
+                        }}
+                      >
+                        {relation || '<relation>'}
+                      </Typography>
+                    </Box>
+
+                    <Button 
+                      variant="contained" 
+                      onClick={handleAssistedSubmit}
+                      disabled={loading || !selectedType || !relation || !user || !object || !selectedObjectType}
+                    >
+                      {loading ? 'Adding...' : 'Add Tuple'}
+                    </Button>
+                  </Box>
+                </Paper>
+              </Box>
+            )}
+          </Box>
         </Paper>
-      </Grid>
-    </Grid>
+
+        {/* Tuples table */}
+        <Paper variant="outlined" sx={{ borderRadius: 1 }}>
+          <TableContainer sx={{ maxHeight: 'calc(100vh - 400px)' }}>
+            <Table stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell>User</TableCell>
+                  <TableCell>Relation</TableCell>
+                  <TableCell>Object</TableCell>
+                  <TableCell width={100} align="right">Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {tuples.map((tuple, index) => (
+                  <TableRow key={index}>
+                    <TableCell>{tuple.user}</TableCell>
+                    <TableCell>{tuple.relation}</TableCell>
+                    <TableCell>{tuple.object}</TableCell>
+                    <TableCell align="right">
+                      <Button
+                        size="small"
+                        color="error"
+                        onClick={async () => {
+                          try {
+                            setLoading(true);
+                            await OpenFGAService.deleteTuple(storeId, tuple);
+                            const response = await OpenFGAService.listTuples(storeId);
+                            setTuples(response.tuples);
+                          } catch (error) {
+                            console.error('Failed to delete tuple:', error);
+                            setError('Failed to delete tuple');
+                          } finally {
+                            setLoading(false);
+                          }
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Paper>
+
+        <Snackbar 
+          open={!!error} 
+          autoHideDuration={10000}
+          onClose={() => setError(null)}
+          anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+          TransitionComponent={SlideTransition}
+          sx={{
+            '& .MuiPaper-root': {
+              maxWidth: '600px',
+              minWidth: '400px'
+            }
+          }}
+        >
+          <Alert 
+            onClose={() => setError(null)} 
+            severity="error" 
+            variant="filled"
+            sx={{ width: '100%' }}
+          >
+            {error}
+          </Alert>
+        </Snackbar>
+      </Box>
+    </Box>
   );
 };

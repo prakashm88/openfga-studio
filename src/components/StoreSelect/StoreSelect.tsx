@@ -1,87 +1,190 @@
-import { useState, useEffect } from 'react';
-import { Box, Select, MenuItem, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
+import { useState, useEffect, useCallback } from 'react';
+import { 
+  Button, 
+  Box, 
+  CircularProgress, 
+  TextField, 
+  Dialog, 
+  DialogTitle, 
+  DialogContent, 
+  DialogActions, 
+  Alert, 
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Typography
+} from '@mui/material';
 import { OpenFGAService } from '../../services/OpenFGAService';
 
+interface Store {
+  id: string;
+  name: string;
+}
+
 interface StoreSelectProps {
-  selectedStore: string;
-  onStoreChange: (storeId: string) => void;
+  selectedStore?: string;
+  onStoreChange: (storeId: string, storeName: string) => void;
 }
 
 export const StoreSelect = ({ selectedStore, onStoreChange }: StoreSelectProps) => {
-  const [stores, setStores] = useState<Array<{ id: string; name: string }>>([]);
+  const [stores, setStores] = useState<Store[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newStoreName, setNewStoreName] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [creatingStore, setCreatingStore] = useState(false);
 
-  const loadStores = async () => {
+  const loadStores = useCallback(async () => {
     try {
-      const storesData = await OpenFGAService.listStores();
-      setStores(storesData.stores);
-      // Only auto-select the first store if there's no selection and we have stores
-      if (storesData.stores.length > 0 && !selectedStore) {
-        onStoreChange(storesData.stores[0].id);
+      setLoading(true);
+      setError(null);
+      const storesList = await OpenFGAService.listStores();
+      setStores(storesList);
+
+      // If we have stores but none selected, select the first one
+      if (storesList.length > 0 && !selectedStore) {
+        onStoreChange(storesList[0].id, storesList[0].name);
       }
     } catch (error) {
       console.error('Failed to load stores:', error);
+      setError(error instanceof Error ? error.message : 'Failed to load stores. Please try again.');
+      setStores([]); // Ensure stores is always an array
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [selectedStore, onStoreChange]);
 
-  // Load stores only once when component mounts
   useEffect(() => {
     loadStores();
-  }, []); // Empty dependency array
+  }, [loadStores]);
 
   const handleCreateStore = async () => {
-    if (!newStoreName) return;
-    setIsLoading(true);
+    if (!newStoreName.trim()) return;
+
     try {
-      const store = await OpenFGAService.createStore(newStoreName);
-      setIsCreateDialogOpen(false);
+      setCreatingStore(true);
+      setError(null);
+      await OpenFGAService.createStore(newStoreName.trim());
       setNewStoreName('');
-      // Refresh the stores list and select the new store
-      await loadStores();
-      onStoreChange(store.id);
+      setIsCreateDialogOpen(false);
+      await loadStores(); // Reload stores after creating new one
     } catch (error) {
       console.error('Failed to create store:', error);
+      setError('Failed to create store. Please try again.');
     } finally {
-      setIsLoading(false);
+      setCreatingStore(false);
     }
   };
 
+  const handleRefresh = () => {
+    loadStores();
+  };
+
+  if (loading && stores.length === 0) {
+    return (
+      <Box sx={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        gap: 1,
+        color: 'text.secondary' 
+      }}>
+        <CircularProgress size={20} />
+        <Typography>Loading stores...</Typography>
+      </Box>
+    );
+  }
+
   return (
-    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-      <Select
-        value={selectedStore || ''}
-        onChange={(e) => onStoreChange(e.target.value)}
-        size="small"
-        sx={{ 
-          minWidth: 200,
-          bgcolor: 'background.paper',
-          '& .MuiSelect-select': {
-            py: 1
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 200 }}>
+        {error && (
+          <Alert 
+            severity="error" 
+            sx={{ 
+              position: 'fixed',
+              right: 16,
+              top: 72,
+              zIndex: 1400,
+              minWidth: 300,
+              boxShadow: (theme) => theme.shadows[3],
+              animation: 'slideIn 0.3s ease-out',
+            }}
+          >
+            {error}
+          </Alert>
+        )}
+        
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+          <FormControl size="small" sx={{ minWidth: 200 }}>
+            <Select
+              value={selectedStore || ''}
+              onChange={(e) => {
+                const selectedStore = stores.find(s => s.id === e.target.value);
+                if (selectedStore) {
+                  onStoreChange(selectedStore.id, selectedStore.name);
+                }
+              }}
+              disabled={loading}
+              displayEmpty
+            >
+              {stores.length === 0 ? (
+                <MenuItem value="" disabled>No stores available</MenuItem>
+              ) : (
+                stores.map((store) => (
+                  <MenuItem key={store.id} value={store.id}>
+                    <Typography>
+                      {store.name} <Typography component="span" color="text.secondary">({store.id})</Typography>
+                    </Typography>
+                  </MenuItem>
+                ))
+              )}
+            </Select>
+          </FormControl>
+          
+          {loading && <CircularProgress size={16} />}
+
+          <Button 
+            onClick={handleRefresh} 
+            disabled={loading}
+            size="small"
+            variant="outlined"
+            sx={{
+              borderColor: 'divider',
+              '&:hover': {
+                borderColor: 'primary.main'
+              }
+            }}
+          >
+            Refresh
+          </Button>
+          
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => setIsCreateDialogOpen(true)}
+            sx={{
+              borderColor: 'divider',
+              '&:hover': {
+                borderColor: 'primary.main'
+              }
+            }}
+          >
+            New Store
+          </Button>
+        </Box>
+      </Box>
+
+      <Dialog 
+        open={isCreateDialogOpen} 
+        onClose={() => setIsCreateDialogOpen(false)}
+        PaperProps={{
+          sx: {
+            bgcolor: 'background.paper',
+            backgroundImage: 'none'
           }
         }}
-        displayEmpty
       >
-        <MenuItem value="" disabled>Select a store</MenuItem>
-        {stores.map((store) => (
-          <MenuItem key={store.id} value={store.id}>
-            {store.name}
-          </MenuItem>
-        ))}
-      </Select>
-      
-      <Button 
-        variant="contained" 
-        size="small"
-        onClick={() => setIsCreateDialogOpen(true)}
-        startIcon={<AddIcon />}
-      >
-        New Store
-      </Button>
-
-      <Dialog open={isCreateDialogOpen} onClose={() => setIsCreateDialogOpen(false)}>
         <DialogTitle>Create New Store</DialogTitle>
         <DialogContent>
           <TextField
@@ -89,17 +192,37 @@ export const StoreSelect = ({ selectedStore, onStoreChange }: StoreSelectProps) 
             margin="dense"
             label="Store Name"
             fullWidth
+            variant="outlined"
             value={newStoreName}
             onChange={(e) => setNewStoreName(e.target.value)}
-            disabled={isLoading}
+            sx={{
+              mt: 1,
+              '& .MuiOutlinedInput-root': {
+                '& fieldset': {
+                  borderColor: 'divider'
+                }
+              }
+            }}
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setIsCreateDialogOpen(false)} disabled={isLoading}>
+          <Button 
+            onClick={() => setIsCreateDialogOpen(false)}
+            sx={{
+              color: 'text.secondary',
+              '&:hover': {
+                color: 'text.primary'
+              }
+            }}
+          >
             Cancel
           </Button>
-          <Button onClick={handleCreateStore} disabled={isLoading || !newStoreName}>
-            Create
+          <Button 
+            onClick={handleCreateStore}
+            disabled={!newStoreName.trim() || creatingStore}
+            variant="contained"
+          >
+            {creatingStore ? 'Creating...' : 'Create'}
           </Button>
         </DialogActions>
       </Dialog>

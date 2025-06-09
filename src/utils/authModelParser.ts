@@ -120,19 +120,23 @@ const LAYOUT_CONFIG = {
   ]
 };
 
-export function parseAuthModelToGraph(dslContent: string): { nodes: Node[]; edges: Edge[] } {
+export function parseAuthModelToGraph(dslContent: string, storeName?: string): { nodes: Node[]; edges: Edge[] } {
   try {
     const model = parseDSL(dslContent);
     const nodes: Node[] = [];
     const edges: Edge[] = [];
     let nodeId = 1;
+
+    if (storeName) {
+      storeName = storeName.charAt(0).toUpperCase() + storeName.slice(1);
+    }
     
     // Add root node
     const rootNodeId = 'root';
     nodes.push({
       id: rootNodeId,
       data: { 
-        label: 'Authorization Model',
+        label: storeName ? `${storeName} Authorization Model` : 'Authorization Model',
         type: 'type'
       },
       position: { x: LAYOUT_CONFIG.ROOT_X, y: LAYOUT_CONFIG.ROOT_Y },

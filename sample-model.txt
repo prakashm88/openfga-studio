@@ -299,3 +299,26 @@ JSON format of DSL content:
     }
   }
 }
+
+
+
+Adding the tuple_keys
+---------------------
+{
+  "authorization_model_id": "01JX7PEH6W4RBRYBHX6DCZV8AN",
+  "writes": {
+    "tuple_keys": [
+      {
+        "user": "user:prakash",
+        "relation": "owner",
+        "object": "folder:prak-group-folder"
+      }
+    ]
+  }
+}
+
+Query for validation
+--------------------
+
+is user:prakash related to group:prak-groups as member?
+is user:amr related to group:prak-groups as owner?
