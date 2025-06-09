@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Box,
   Paper,
@@ -145,7 +145,15 @@ export const QueryTab = ({
   }, [storeId]);
 
   const formatQueryAsText = (query: RelationshipTuple): string => {
-    return `is ${query.user} related to ${query.object} as ${query.relation}`;
+    let text = `Can ${query.user} access ${query.object} as ${query.relation}`;
+    if (query.condition) {
+      const conditions = Object.entries(query.condition.context)
+        .map(([key, value]) => `${key} as ${value}`)
+        .join(", ");
+      text += ` with ${conditions}`;
+    }
+    text += "?";
+    return text;
   };
 
   const handleReplayQuery = (savedQuery: SavedQuery) => {
@@ -499,23 +507,7 @@ export const QueryTab = ({
                       </Typography>
 
                       <Typography component="span" color="text.secondary">
-                        have
-                      </Typography>
-                      <Typography
-                        component="span"
-                        sx={{
-                          color: "success.main",
-                          bgcolor: alpha("#2e7d32", 0.1),
-                          px: 1,
-                          py: 0.5,
-                          borderRadius: 1,
-                        }}
-                      >
-                        {relation?.label || "<relation>"}
-                      </Typography>
-
-                      <Typography component="span" color="text.secondary">
-                        access to
+                        access
                       </Typography>
                       <Typography
                         component="span"
@@ -531,6 +523,51 @@ export const QueryTab = ({
                           ? `${selectedObjectType}:${object}`
                           : "<object>"}
                       </Typography>
+
+                      <Typography component="span" color="text.secondary">
+                        as
+                      </Typography>
+                      <Typography
+                        component="span"
+                        sx={{
+                          color: "success.main",
+                          bgcolor: alpha("#2e7d32", 0.1),
+                          px: 1,
+                          py: 0.5,
+                          borderRadius: 1,
+                        }}
+                      >
+                        {relation?.label || "<relation>"}
+                      </Typography>
+
+                      {conditionState && (
+                        <>
+                          <Typography component="span" color="text.secondary">
+                            with
+                          </Typography>
+                          {Object.entries(conditionState.context).map(([key, value], i, arr) => (
+                            <React.Fragment key={key}>
+                              <Typography
+                                component="span"
+                                sx={{
+                                  color: "info.main",
+                                  bgcolor: alpha("#0288d1", 0.1),
+                                  px: 1,
+                                  py: 0.5,
+                                  borderRadius: 1,
+                                }}
+                              >
+                                {`${key} as ${value}`}
+                              </Typography>
+                              {i < arr.length - 1 && (
+                                <Typography component="span" color="text.secondary">
+                                  ,{" "}
+                                </Typography>
+                              )}
+                            </React.Fragment>
+                          ))}
+                        </>
+                      )}
                       <Typography component="span" color="text.secondary">
                         ?
                       </Typography>
