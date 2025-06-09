@@ -320,5 +320,5 @@ Adding the tuple_keys
 Query for validation
 --------------------
 
-is user:prak related to group:prak-groups as member?
+is user:prakash related to group:prak-groups as member?
 is user:amr related to group:prak-groups as owner?

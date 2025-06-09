@@ -1,5 +1,20 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Button, Box, CircularProgress, TextField, Dialog, DialogTitle, DialogContent, DialogActions, Alert } from '@mui/material';
+import { 
+  Button, 
+  Box, 
+  CircularProgress, 
+  TextField, 
+  Dialog, 
+  DialogTitle, 
+  DialogContent, 
+  DialogActions, 
+  Alert, 
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Typography
+} from '@mui/material';
 import { OpenFGAService } from '../../services/OpenFGAService';
 
 interface Store {
@@ -68,9 +83,14 @@ export const StoreSelect = ({ selectedStore, onStoreChange }: StoreSelectProps) 
 
   if (loading && stores.length === 0) {
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+      <Box sx={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        gap: 1,
+        color: 'text.secondary' 
+      }}>
         <CircularProgress size={20} />
-        <span>Loading stores...</span>
+        <Typography>Loading stores...</Typography>
       </Box>
     );
   }
@@ -87,7 +107,7 @@ export const StoreSelect = ({ selectedStore, onStoreChange }: StoreSelectProps) 
               top: 72,
               zIndex: 1400,
               minWidth: 300,
-              boxShadow: 3,
+              boxShadow: (theme) => theme.shadows[3],
               animation: 'slideIn 0.3s ease-out',
             }}
           >
@@ -96,32 +116,31 @@ export const StoreSelect = ({ selectedStore, onStoreChange }: StoreSelectProps) 
         )}
         
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-          <select
-            value={selectedStore || ''}
-            onChange={(e) => {
-              const selectedStore = stores.find(s => s.id === e.target.value);
-              if (selectedStore) {
-                onStoreChange(selectedStore.id, selectedStore.name);
-              }
-            }}
-            disabled={loading}
-            style={{
-              padding: '8px',
-              borderRadius: '4px',
-              border: '1px solid #ccc',
-              minWidth: '200px'
-            }}
-          >
-            {stores.length === 0 ? (
-              <option value="">No stores available</option>
-            ) : (
-              stores.map((store) => (
-                <option key={store.id} value={store.id}>
-                  {store.name} ({store.id})
-                </option>
-              ))
-            )}
-          </select>
+          <FormControl size="small" sx={{ minWidth: 200 }}>
+            <Select
+              value={selectedStore || ''}
+              onChange={(e) => {
+                const selectedStore = stores.find(s => s.id === e.target.value);
+                if (selectedStore) {
+                  onStoreChange(selectedStore.id, selectedStore.name);
+                }
+              }}
+              disabled={loading}
+              displayEmpty
+            >
+              {stores.length === 0 ? (
+                <MenuItem value="" disabled>No stores available</MenuItem>
+              ) : (
+                stores.map((store) => (
+                  <MenuItem key={store.id} value={store.id}>
+                    <Typography>
+                      {store.name} <Typography component="span" color="text.secondary">({store.id})</Typography>
+                    </Typography>
+                  </MenuItem>
+                ))
+              )}
+            </Select>
+          </FormControl>
           
           {loading && <CircularProgress size={16} />}
 
@@ -130,6 +149,12 @@ export const StoreSelect = ({ selectedStore, onStoreChange }: StoreSelectProps) 
             disabled={loading}
             size="small"
             variant="outlined"
+            sx={{
+              borderColor: 'divider',
+              '&:hover': {
+                borderColor: 'primary.main'
+              }
+            }}
           >
             Refresh
           </Button>
@@ -138,13 +163,28 @@ export const StoreSelect = ({ selectedStore, onStoreChange }: StoreSelectProps) 
             variant="outlined"
             size="small"
             onClick={() => setIsCreateDialogOpen(true)}
+            sx={{
+              borderColor: 'divider',
+              '&:hover': {
+                borderColor: 'primary.main'
+              }
+            }}
           >
             New Store
           </Button>
         </Box>
       </Box>
 
-      <Dialog open={isCreateDialogOpen} onClose={() => setIsCreateDialogOpen(false)}>
+      <Dialog 
+        open={isCreateDialogOpen} 
+        onClose={() => setIsCreateDialogOpen(false)}
+        PaperProps={{
+          sx: {
+            bgcolor: 'background.paper',
+            backgroundImage: 'none'
+          }
+        }}
+      >
         <DialogTitle>Create New Store</DialogTitle>
         <DialogContent>
           <TextField
@@ -155,13 +195,32 @@ export const StoreSelect = ({ selectedStore, onStoreChange }: StoreSelectProps) 
             variant="outlined"
             value={newStoreName}
             onChange={(e) => setNewStoreName(e.target.value)}
+            sx={{
+              mt: 1,
+              '& .MuiOutlinedInput-root': {
+                '& fieldset': {
+                  borderColor: 'divider'
+                }
+              }
+            }}
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setIsCreateDialogOpen(false)}>Cancel</Button>
+          <Button 
+            onClick={() => setIsCreateDialogOpen(false)}
+            sx={{
+              color: 'text.secondary',
+              '&:hover': {
+                color: 'text.primary'
+              }
+            }}
+          >
+            Cancel
+          </Button>
           <Button 
             onClick={handleCreateStore}
             disabled={!newStoreName.trim() || creatingStore}
+            variant="contained"
           >
             {creatingStore ? 'Creating...' : 'Create'}
           </Button>

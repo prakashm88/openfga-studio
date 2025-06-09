@@ -1,6 +1,7 @@
 // OpenFGA API service
 import axios from 'axios';
 import type { OpenFGAModel } from '../types/models';
+import { dslToJson } from '../utils/modelConverter';
 
 // Create axios instance with common config
 const api = axios.create({
@@ -50,7 +51,13 @@ export class OpenFGAService {
 
   static async writeAuthorizationModel(storeId: string, model: string): Promise<{ authorization_model_id: string }> {
     try {
-      const response = await api.post(`/stores/${storeId}/authorization-models`, model, {
+      // Convert DSL to JSON if it's not already in JSON format
+      let jsonModel = model;
+      if (!model.trim().startsWith('{')) {
+        jsonModel = JSON.stringify(dslToJson(model));
+      }
+      
+      const response = await api.post(`/stores/${storeId}/authorization-models`, jsonModel, {
         headers: {
           'Content-Type': 'application/json'
         }

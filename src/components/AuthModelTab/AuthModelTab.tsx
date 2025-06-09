@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { Box, Paper, Button, IconButton } from '@mui/material';
+import { Box, Paper, Button, IconButton, Snackbar, Alert } from '@mui/material';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
@@ -25,6 +25,11 @@ export const AuthModelTab = ({ storeId, storeName, initialModel, authModelId, on
   const [edges, setEdges] = useState<Edge[]>([]);
   const [leftPanelExpanded, setLeftPanelExpanded] = useState(true);
   const [rightPanelExpanded, setRightPanelExpanded] = useState(true);
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error';
+  }>({ open: false, message: '', severity: 'success' });
 
   useEffect(() => {
     setAuthModel(initialModel);
@@ -60,8 +65,18 @@ export const AuthModelTab = ({ storeId, storeName, initialModel, authModelId, on
     try {
       await OpenFGAService.writeAuthorizationModel(storeId, authModel);
       onModelUpdate(authModel);
+      setSnackbar({
+        open: true,
+        message: 'Authorization model saved successfully',
+        severity: 'success'
+      });
     } catch (error) {
       console.error('Failed to save authorization model:', error);
+      setSnackbar({
+        open: true,
+        message: error instanceof Error ? error.message : 'Failed to save authorization model',
+        severity: 'error'
+      });
     }
   };
 
@@ -170,6 +185,21 @@ export const AuthModelTab = ({ storeId, storeName, initialModel, authModelId, on
       >
         {rightPanelExpanded ? <ChevronRightIcon /> : <ChevronLeftIcon />}
       </IconButton>
+      <Snackbar 
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Alert 
+          onClose={() => setSnackbar(prev => ({ ...prev, open: false }))} 
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

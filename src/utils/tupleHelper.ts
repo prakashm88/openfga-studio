@@ -75,13 +75,11 @@ export function parseTupleObject(object: string): { type: string; id: string } {
 
 export function extractRelationshipMetadata(modelStr: string): RelationshipMetadata {
   const types = new Map<string, TypeMetadata>();
-  const reverseRelations = new Map<string, Set<{targetType: string, relation: string}>>();
   
   try {
     // Try to parse as JSON first
     const model = JSON.parse(modelStr) as AuthorizationModel;
     
-    // First pass: collect all direct relations and build reverse index
     model.type_definitions.forEach((typeDef: TypeDefinition) => {
       const typeMetadata: TypeMetadata = {
         type: typeDef.type,
@@ -99,15 +97,6 @@ export function extractRelationshipMetadata(modelStr: string): RelationshipMetad
           const userTypes = new Set<string>();
 
           directTypes.forEach(dt => {
-            // Add to reverse index
-            if (!reverseRelations.has(dt.type)) {
-              reverseRelations.set(dt.type, new Set());
-            }
-            reverseRelations.get(dt.type)?.add({
-              targetType: typeDef.type,
-              relation: relationName
-            });
-
             // Add the type with proper formatting
             if (dt.relation) {
               // For relations like group#member
@@ -137,26 +126,15 @@ export function extractRelationshipMetadata(modelStr: string): RelationshipMetad
       types.set(typeDef.type, typeMetadata);
     });
 
-    // Second pass: add reverse relations to types that can be users
-    reverseRelations.forEach((targetRelations, userType) => {
-      const typeMetadata = types.get(userType) || {
-        type: userType,
-        relations: [],
-        userTypes: new Map(),
-        allowDirectInput: true
-      };
-
-      targetRelations.forEach(({targetType, relation}) => {
-        const relName = `can_be_${relation}_of_${targetType}`;
-        if (!typeMetadata.relations.includes(relName)) {
-          typeMetadata.relations.push(relName);
-          typeMetadata.userTypes.set(relName, [targetType]);
+    types.forEach((typeMetadata) => {
+      typeMetadata.relations.forEach(relationName => {
+        if (!typeMetadata.userTypes.has(relationName)) {
+          typeMetadata.userTypes.set(relationName, ['user']);
         }
       });
-
-      types.set(userType, typeMetadata);
     });
 
+    return { types };
   } catch (error: unknown) {
     // If JSON parse fails, try DSL format
     try {
@@ -164,8 +142,7 @@ export function extractRelationshipMetadata(modelStr: string): RelationshipMetad
       return extractRelationshipMetadata(JSON.stringify(model));
     } catch (dslError: unknown) {
       console.error('Failed to parse model in both JSON and DSL format:', { jsonError: error, dslError });
+      throw error;
     }
   }
-
-  return { types };
 }

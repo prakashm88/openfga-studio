@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Box, Paper, TextField, Button, Typography, ToggleButton, ToggleButtonGroup, Autocomplete, Alert } from '@mui/material';
+import { Box, Paper, TextField, Button, Typography, ToggleButton, ToggleButtonGroup, Autocomplete, Alert, alpha } from '@mui/material';
 import { OpenFGAService } from '../../services/OpenFGAService';
 import { extractRelationshipMetadata, type RelationshipMetadata, formatTupleUser, formatTupleObject } from '../../utils/tupleHelper';
 
@@ -18,8 +18,9 @@ interface SavedQuery {
 
 export const QueryTab = ({ storeId, currentModel, authModelId }: QueryTabProps) => {
   const [metadata, setMetadata] = useState<RelationshipMetadata>();
-  const [queryMode, setQueryMode] = useState<'form' | 'text'>('form');
+  const [queryMode, setQueryMode] = useState<'form' | 'text'>('text');
   const [selectedType, setSelectedType] = useState('');
+  const [selectedObjectType, setSelectedObjectType] = useState('');
   const [user, setUser] = useState('');
   const [relation, setRelation] = useState('');
   const [object, setObject] = useState('');
@@ -35,13 +36,19 @@ export const QueryTab = ({ storeId, currentModel, authModelId }: QueryTabProps) 
     [metadata]
   );
 
-  // Available relations for the selected type
-  const availableRelations = useMemo(() => 
-    selectedType && metadata ? 
-      metadata.types.get(selectedType)?.relations || [] 
-      : [],
-    [selectedType, metadata]
-  );
+  // Available relations for the selected object type
+  const availableRelations = useMemo(() => {
+    if (!selectedType || !metadata) return [];
+    
+    // Get the object type metadata
+    const objectTypeMetadata = metadata.types.get(selectedType);
+    if (!objectTypeMetadata) return [];
+    
+    // Get all valid relations for the type
+    const relations = objectTypeMetadata.relations;
+
+    return relations;
+  }, [selectedType, metadata]);
 
   // Available user types for the selected relation
   const availableUserTypes = useMemo(() => 
@@ -199,123 +206,302 @@ export const QueryTab = ({ storeId, currentModel, authModelId }: QueryTabProps) 
   };
 
   return (
-    <Box>
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Typography variant="h6" gutterBottom>Check Authorization</Typography>
-        
-        <ToggleButtonGroup
-          value={queryMode}
-          exclusive
-          onChange={(_, mode) => mode && setQueryMode(mode)}
-          sx={{ mb: 2 }}
-        >
-          <ToggleButton value="form">Form Mode</ToggleButton>
-          <ToggleButton value="text">Text Mode</ToggleButton>
-        </ToggleButtonGroup>
+    <Box sx={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      height: '100%'
+    }}>
+      {/* Header Section */}
+      <Box sx={{ 
+        bgcolor: 'background.paper',
+        p: 2,
+        borderBottom: 1,
+        borderColor: 'divider'
+      }}>
+        <Typography variant="h6" fontSize={18} fontWeight={"bold"}>
+          Validate Tuples
+        </Typography>
+      </Box>
 
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
-        )}
+      {/* Content Section */}
+      <Box sx={{ p: 2, flex: 1, overflow: 'auto' }}>
+        {/* Mode selector and form */}
+        <Paper variant="outlined" sx={{ mb: 2, borderRadius: 1 }}>
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 1,
+            px: 2,
+            py: 1.5,
+            borderBottom: 1,
+            borderColor: 'divider',
+            bgcolor: 'background.default'
+          }}>
+            <Typography fontSize={14}>Mode:</Typography>
+            <ToggleButtonGroup
+              value={queryMode}
+              exclusive
+              onChange={(_, mode) => mode && setQueryMode(mode)}
+              size="small"
+              sx={{
+                '& .MuiToggleButton-root': {
+                  px: 2,
+                  bgcolor: 'action.hover',
+                  '&.Mui-selected': {
+                    bgcolor: 'primary.main',
+                    color: 'primary.contrastText',
+                    '&:hover': {
+                      bgcolor: 'primary.dark'
+                    }
+                  }
+                }
+              }}
+            >
+              <ToggleButton value="form" sx={{ textTransform: 'uppercase', fontSize: 13 }}>
+                Assisted
+              </ToggleButton>
+              <ToggleButton value="text" sx={{ textTransform: 'uppercase', fontSize: 13 }}>
+                Freeform
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
 
-        {queryMode === 'form' ? (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Autocomplete
-              value={selectedType}
-              onChange={(_, newValue) => setSelectedType(newValue || '')}
-              options={availableTypes}
-              renderInput={(params) => <TextField {...params} label="Object Type" />}
-            />
-            
-            {selectedType && (
-              <>
-                <Autocomplete
-                  value={relation}
-                  onChange={(_, newValue) => setRelation(newValue || '')}
-                  options={availableRelations}
-                  renderInput={(params) => <TextField {...params} label="Relation" />}
-                />
-
-                <TextField
-                  label="Object ID"
-                  value={object}
-                  onChange={(e) => setObject(e.target.value)}
-                  helperText={`Will be formatted as ${selectedType}:objectId`}
-                />
-
-                {relation && (
-                  <TextField
-                    label="User"
-                    value={user}
-                    onChange={(e) => setUser(e.target.value)}
-                    helperText={`Suggested types: ${availableUserTypes.join(', ')}`}
-                  />
-                )}
-              </>
+          <Box sx={{ p: 3, bgcolor: 'background.paper' }}>
+            {error && (
+              <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
             )}
 
-            <Button 
-              variant="contained" 
-              onClick={handleQueryCheckForm}
-              disabled={isSubmitting || !selectedType || !relation || !user || !object}
-            >
-              Check Authorization
-            </Button>
-          </Box>
-        ) : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <TextField
-              label="Query"
-              value={textQuery}
-              onChange={(e) => setTextQuery(e.target.value)}
-              multiline
-              rows={2}
-              helperText='Format: "is user related to object as relation" or "type:user#relation@object"'
-            />
-            <Button 
-              variant="contained" 
-              onClick={handleQueryCheckText}
-              disabled={isSubmitting || !textQuery.trim()}
-            >
-              Check Authorization
-            </Button>
-          </Box>
-        )}
+            {queryMode === 'form' ? (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {/* First row - User information */}
+                <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                  <Autocomplete
+                    size="small"
+                    sx={{ width: 250 }}
+                    value={selectedType}
+                    onChange={(_, newValue) => {
+                      setSelectedType(newValue || '');
+                      setUser('');
+                      setRelation('');
+                    }}
+                    options={availableTypes}
+                    renderInput={(params) => <TextField {...params} label="User Type" required />}
+                  />
+                  
+                  <TextField
+                    size="small"
+                    sx={{ width: 250 }}
+                    label="User Name"
+                    value={user}
+                    onChange={(e) => setUser(e.target.value)}
+                    required
+                    helperText={`Will be prefixed with '${selectedType}:'`}
+                  />
+                </Box>
 
-        {result !== null && (
-          <Alert 
-            severity={result.allowed ? 'success' : 'error'}
-            sx={{ mt: 2 }}
-          >
-            {result.allowed ? 'Access Allowed' : 'Access Denied'}
-          </Alert>
-        )}
-      </Paper>
+                {/* Second row - Object information */}
+                <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                  <Autocomplete
+                    size="small"
+                    sx={{ width: 250 }}
+                    value={selectedObjectType}
+                    onChange={(_, newValue) => setSelectedObjectType(newValue || '')}
+                    options={availableTypes}
+                    renderInput={(params) => <TextField {...params} label="Object Type" required />}
+                  />
+                  
+                  <TextField
+                    size="small"
+                    sx={{ width: 250 }}
+                    label="Object Name"
+                    value={object}
+                    onChange={(e) => setObject(e.target.value)}
+                    required
+                    helperText={`Will be prefixed with '${selectedObjectType}:'`}
+                  />
+                </Box>
 
-      {savedQueries.length > 0 && (
-        <Paper sx={{ p: 2 }}>
-          <Typography variant="h6" gutterBottom>Recent Queries</Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {savedQueries.map((query, index) => (
-              <Paper 
-                key={index} 
-                variant="outlined" 
-                sx={{ p: 1, cursor: 'pointer' }}
-                onClick={() => handleReplayQuery(query)}
+                {/* Third row - Relation */}
+                <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                  <Autocomplete
+                    size="small"
+                    sx={{ width: 350 }}
+                    value={relation}
+                    onChange={(_, newValue) => setRelation(newValue || '')}
+                    options={availableRelations}
+                    renderInput={(params) => <TextField {...params} label="Relation" required />}
+                    disabled={!selectedObjectType}
+                  />
+                </Box>
+                 
+
+                {/* Preview section */}
+                <Paper variant="outlined" sx={{ 
+                  p: 2,
+                  bgcolor: 'action.hover',
+                  borderColor: 'divider'
+                }}>
+                  <Box sx={{ 
+                    display: 'flex', 
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 2
+                  }}>
+                    <Box sx={{ 
+                      flex: 1,
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      alignItems: 'center',
+                      gap: 0.5,
+                      fontSize: '0.9rem',
+                      fontFamily: '"Roboto Mono", monospace'
+                    }}>
+                      <Typography component="span" color="text.secondary">Can</Typography>
+                      <Typography 
+                        component="span" 
+                        sx={{ 
+                          color: 'primary.main',
+                          bgcolor: alpha('#1976d2', 0.1),
+                          px: 1,
+                          py: 0.5,
+                          borderRadius: 1
+                        }}
+                      >
+                        {user || '<user>'}
+                      </Typography>
+
+                      <Typography component="span" color="text.secondary">have</Typography>
+                      <Typography 
+                        component="span" 
+                        sx={{ 
+                          color: 'success.main',
+                          bgcolor: alpha('#2e7d32', 0.1),
+                          px: 1,
+                          py: 0.5,
+                          borderRadius: 1
+                        }}
+                      >
+                        {relation || '<relation>'}
+                      </Typography>
+
+                      <Typography component="span" color="text.secondary">access to</Typography>
+                      <Typography 
+                        component="span" 
+                        sx={{ 
+                          color: 'secondary.main',
+                          bgcolor: alpha('#9c27b0', 0.1),
+                          px: 1,
+                          py: 0.5,
+                          borderRadius: 1
+                        }}
+                      >
+                        {selectedType && object ? `${selectedType}:${object}` : '<object>'}
+                      </Typography>
+                      <Typography component="span" color="text.secondary">?</Typography>
+                    </Box>
+
+                    <Button 
+                      variant="contained" 
+                      onClick={handleQueryCheckForm}
+                      disabled={isSubmitting || !selectedType || !relation || !user || !object}
+                    >
+                      Check Access
+                    </Button>
+                  </Box>
+                </Paper>
+              </Box>
+            ) : (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <TextField
+                  size="small"
+                  label="Query"
+                  value={textQuery}
+                  onChange={(e) => setTextQuery(e.target.value)}
+                  multiline
+                  rows={2}
+                  fullWidth
+                  helperText='Format: "is user related to object as relation" or "type:user#relation@object"'
+                />
+                
+                <Paper variant="outlined" sx={{ 
+                  p: 2,
+                  bgcolor: 'action.hover',
+                  borderColor: 'divider'
+                }}>
+                  <Box sx={{ 
+                    display: 'flex', 
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 2
+                  }}>
+                    <Typography 
+                      sx={{ 
+                        flex: 1,
+                        fontFamily: '"Roboto Mono", monospace',
+                        fontSize: '0.9rem',
+                        color: textQuery ? 'text.primary' : 'text.secondary'
+                      }}
+                    >
+                      {textQuery || 'Enter your authorization query...'}
+                    </Typography>
+
+                    <Button 
+                      variant="contained" 
+                      onClick={handleQueryCheckText}
+                      disabled={isSubmitting || !textQuery.trim()}
+                    >
+                      Check Access
+                    </Button>
+                  </Box>
+                </Paper>
+              </Box>
+            )}
+
+            {result !== null && (
+              <Alert 
+                severity={result.allowed ? 'success' : 'error'}
+                sx={{ mt: 2 }}
               >
-                <Typography variant="body2" color="textSecondary">
-                  {query.queryText || `${query.query.user} - ${query.query.relation} - ${query.query.object}`}
-                </Typography>
-                <Alert 
-                  severity={query.result.allowed ? 'success' : 'error'}
-                  sx={{ mt: 1 }}
-                >
-                  {query.result.allowed ? 'Allowed' : 'Denied'}
-                </Alert>
-              </Paper>
-            ))}
+                {result.allowed ? 'Access Allowed' : 'Access Denied'}
+              </Alert>
+            )}
           </Box>
         </Paper>
-      )}
+
+        {/* Recent Queries */}
+        {savedQueries.length > 0 && (
+          <Paper variant="outlined" sx={{ p: 2, borderRadius: 1 }}>
+            <Typography variant="h6" sx={{ mb: 2, fontSize: 16 }}>Recent Queries</Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {savedQueries.map((query, index) => (
+                <Paper 
+                  key={index} 
+                  variant="outlined" 
+                  sx={{ 
+                    p: 2, 
+                    cursor: 'pointer',
+                    bgcolor: 'background.paper',
+                    '&:hover': {
+                      bgcolor: 'action.hover'
+                    }
+                  }}
+                  onClick={() => handleReplayQuery(query)}
+                >
+                  <Typography variant="body2" color="text.secondary">
+                    {query.queryText || `${query.query.user} - ${query.query.relation} - ${query.query.object}`}
+                  </Typography>
+                  <Alert 
+                    severity={query.result.allowed ? 'success' : 'error'}
+                    sx={{ mt: 1 }}
+                  >
+                    {query.result.allowed ? 'Allowed' : 'Denied'}
+                  </Alert>
+                </Paper>
+              ))}
+            </Box>
+          </Paper>
+        )}
+      </Box>
     </Box>
   );
 };
