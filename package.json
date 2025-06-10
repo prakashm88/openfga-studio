@@ -3,6 +3,16 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "description": "OpenFGA Studio - A web-based UI for OpenFGA",
+  "keywords": [
+    "openfga",
+    "studio",
+    "web-ui"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prakashm88/openfga-studio.git"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
