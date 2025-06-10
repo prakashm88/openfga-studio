@@ -88,15 +88,24 @@ export class OpenFGAService {
           user: string;
           relation: string;
           object: string;
-          condition: string | null;
+          condition?: {
+            name: string;
+            context: Record<string, string | number | boolean>;
+          };
         };
         timestamp: string;
       }
 
-      const tuples = (response.data.tuples || []).map((tuple: TupleResponse) => ({
+      // Sort tuples by timestamp in descending order (latest first)
+      const sortedTuples = [...(response.data.tuples || [])].sort((a: TupleResponse, b: TupleResponse) => {
+        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+      });
+
+      const tuples = sortedTuples.map((tuple: TupleResponse) => ({
         user: tuple.key.user,
         relation: tuple.key.relation,
-        object: tuple.key.object
+        object: tuple.key.object,
+        condition: tuple.key.condition
       }));
 
       return { tuples };
@@ -106,16 +115,31 @@ export class OpenFGAService {
     }
   }
 
-  static async writeTuple(storeId: string, tuple: RelationshipTuple, authorizationModelId?: string): Promise<void> {
+  static async writeTuple(storeId: string, tuple: RelationshipTuple, authModelId: string): Promise<void> {
     try {
+      // Filter out empty condition parameters
+      const condition = tuple.condition ? {
+        name: tuple.condition.name,
+        context: Object.fromEntries(
+          Object.entries(tuple.condition.context)
+            .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        )
+      } : undefined;
+
       await api.post(`/stores/${storeId}/write`, {
-        authorization_model_id: authorizationModelId,
         writes: {
           tuple_keys: [{
             user: tuple.user,
             relation: tuple.relation,
-            object: tuple.object
+            object: tuple.object,
+            ...(condition && Object.keys(condition.context).length > 0 ? { condition } : {})
           }]
+        },
+        authorization_model_id: authModelId
+      }, {
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
         }
       });
     } catch (error) {
@@ -124,15 +148,22 @@ export class OpenFGAService {
     }
   }
 
-  static async deleteTuple(storeId: string, tuple: RelationshipTuple): Promise<void> {
+  static async deleteTuple(storeId: string, tuple: RelationshipTuple, authModelId: string): Promise<void> {
     try {
       await api.post(`/stores/${storeId}/write`, {
         deletes: {
           tuple_keys: [{
             user: tuple.user,
             relation: tuple.relation,
-            object: tuple.object
+            object: tuple.object,
+            ...(tuple.condition ? { condition: tuple.condition } : {})
           }]
+        },
+        authorization_model_id: authModelId
+      }, {
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
         }
       });
     } catch (error) {

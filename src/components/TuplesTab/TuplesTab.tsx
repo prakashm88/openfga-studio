@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Box, 
   Paper, 
@@ -21,7 +21,7 @@ import {
   type SlideProps
 } from '@mui/material';
 import { OpenFGAService } from '../../services/OpenFGAService';
-import { extractRelationshipMetadata, type RelationshipMetadata } from '../../utils/tupleHelper';
+import { extractRelationshipMetadata, type RelationshipMetadata, type RelationshipTuple } from '../../utils/tupleHelper';
 
 interface TuplesTabProps {
   storeId: string;
@@ -38,15 +38,33 @@ interface ApiError extends Error {
   };
 }
 
+interface RelationOption {
+  id: string;
+  label: string;
+  condition?: {
+    name: string;
+    parameters: {
+      [key: string]: {
+        type_name: string;
+      };
+    };
+  };
+}
+
+interface ConditionState {
+  name: string;
+  context: Record<string, string | number | boolean>;
+}
+
 // Slide transition component for the error toast
 function SlideTransition(props: SlideProps) {
   return <Slide {...props} direction="left" />;
 }
 
 export const TuplesTab = ({ storeId, currentModel, authModelId }: TuplesTabProps) => {
-  const [tuples, setTuples] = useState<Array<{ user: string; relation: string; object: string }>>([]);
+  const [tuples, setTuples] = useState<RelationshipTuple[]>([]);
   const [metadata, setMetadata] = useState<RelationshipMetadata | undefined>();
-  const [error, setError] = useState<string | null>(null);
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [mode, setMode] = useState<'assisted' | 'freeform'>('assisted');
   const [loading, setLoading] = useState(false);
   
@@ -58,9 +76,10 @@ export const TuplesTab = ({ storeId, currentModel, authModelId }: TuplesTabProps
   // Form state for assisted mode
   const [selectedType, setSelectedType] = useState('');
   const [user, setUser] = useState('');
-  const [relation, setRelation] = useState('');
+  const [relation, setRelation] = useState<RelationOption | null>(null);
   const [object, setObject] = useState('');
   const [selectedObjectType, setSelectedObjectType] = useState('');
+  const [conditionState, setConditionState] = useState<ConditionState | null>(null);
 
   // Available types from metadata
   const availableTypes = useMemo(() => 
@@ -93,15 +112,29 @@ export const TuplesTab = ({ storeId, currentModel, authModelId }: TuplesTabProps
       return userTypes.some(type => type.startsWith(selectedType));
     });
 
-    return relations.map(relation => ({
-      id: relation,
-      label: relation
-    }));
+    return relations.map(relation => {
+      // Get related userTypes to check for conditions
+      const userTypes = objectTypeMetadata.userTypes.get(relation) || [];
+      // Find any condition from user types with the selected type
+      const userTypeWithCondition = userTypes.find(type => type.startsWith(selectedType));
+      
+      // Get condition from the metadata if it exists
+      const condition = userTypeWithCondition && metadata.conditions?.[userTypeWithCondition.split(' with ')[1]];
+
+      return {
+        id: relation,
+        label: relation,
+        condition: condition ? {
+          name: condition.name,
+          parameters: condition.parameters
+        } : undefined
+      };
+    });
   }, [selectedType, selectedObjectType, metadata]);
 
   // Update relation when object type or user type changes
   useEffect(() => {
-    setRelation(''); // Clear previous relation when types change
+    setRelation(null); // Clear previous relation when types change
   }, [selectedType, selectedObjectType]);
 
   // Load initial data
@@ -118,7 +151,10 @@ export const TuplesTab = ({ storeId, currentModel, authModelId }: TuplesTabProps
         }
       } catch (error) {
         console.error('Failed to load data:', error);
-        setError('Failed to load tuples. Please try again.');
+        setNotification({
+          message: 'Failed to load tuples. Please try again.',
+          type: 'error'
+        });
       } finally {
         setLoading(false);
       }
@@ -127,37 +163,92 @@ export const TuplesTab = ({ storeId, currentModel, authModelId }: TuplesTabProps
     loadData();
   }, [storeId, currentModel]);
 
+  // Render condition parameters UI
+  const renderConditionFields = () => {
+    if (!relation?.condition) return null;
+
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <Typography variant="subtitle2" color="text.secondary">
+          Condition Parameters for {relation.condition.name}
+        </Typography>
+        {Object.entries(relation.condition.parameters || {}).map(
+          ([paramName, paramInfo]) => {
+            const paramType = paramInfo.type_name
+              .replace("TYPE_NAME_", "")
+              .toLowerCase();
+            return (
+              <TextField
+                key={paramName}
+                size="small"
+                sx={{ width: 350 }}
+                label={`${paramName} (${paramType})`}
+                value={conditionState?.context[paramName] ?? ""}
+                onChange={(e) => {
+                  const conditionName = relation.condition?.name;
+                  if (conditionName) {
+                    setConditionState((prev) => ({
+                      name: conditionName,
+                      context: {
+                        ...(prev?.context || {}),
+                        [paramName]: e.target.value,
+                      },
+                    }));
+                  }
+                }}
+              />
+            );
+          }
+        )}
+      </Box>
+    );
+  };
+
   const handleAssistedSubmit = async () => {
     try {
-      setError(null);
+      setNotification(null);
       setLoading(true);
+      
+      if (!relation) {
+        throw new Error('Relation is required');
+      }
 
       const formattedUser = user.includes(':') ? user : `${selectedType}:${user}`;
       const formattedObject = object.includes(':') ? object : `${selectedObjectType}:${object}`;
 
-      await OpenFGAService.writeTuple(storeId, {
+      const tuple: RelationshipTuple = {
         user: formattedUser,
-        relation,
-        object: formattedObject
-      }, authModelId);
+        relation: relation.id,
+        object: formattedObject,
+        ...(conditionState ? { condition: conditionState } : {})
+      };
+
+      await OpenFGAService.writeTuple(storeId, tuple, authModelId);
 
       // Reset form
       setSelectedType('');
       setUser('');
-      setRelation('');
+      setRelation(null);
       setObject('');
       setSelectedObjectType('');
+      setConditionState(null);
 
       // Reload tuples
       const response = await OpenFGAService.listTuples(storeId);
       setTuples(response.tuples);
 
-      setError(`Successfully added tuple: ${formattedUser} ${relation} ${formattedObject}`);
+      setNotification({
+        message: `Successfully added tuple: ${formattedUser} ${relation.id} ${formattedObject}`,
+        type: 'success'
+      });
     } catch (error) {
       console.error('Failed to write tuple:', error);
       const apiError = error as ApiError;
       const errorMessage = apiError.response?.data?.message || apiError.message || 'Failed to add tuple';
-      setError(errorMessage);
+      setNotification({
+        message: errorMessage,
+        type: 'error'
+      });
     } finally {
       setLoading(false);
     }
@@ -165,7 +256,7 @@ export const TuplesTab = ({ storeId, currentModel, authModelId }: TuplesTabProps
 
   const handleFreeformSubmit = async () => {
     try {
-      setError(null);
+      setNotification(null);
       setLoading(true);
 
       await OpenFGAService.writeTuple(storeId, {
@@ -183,10 +274,16 @@ export const TuplesTab = ({ storeId, currentModel, authModelId }: TuplesTabProps
       const response = await OpenFGAService.listTuples(storeId);
       setTuples(response.tuples);
 
-      setError(`Successfully added tuple: ${freeformUser} ${freeformRelation} ${freeformObject}`);
+      setNotification({
+        message: `Successfully added tuple: ${freeformUser} ${freeformRelation} ${freeformObject}`,
+        type: 'success'
+      });
     } catch (error) {
       console.error('Failed to write tuple:', error);
-      setError(error instanceof Error ? error.message : 'Failed to add tuple');
+      setNotification({
+        message: error instanceof Error ? error.message : 'Failed to add tuple',
+        type: 'error'
+      });
     } finally {
       setLoading(false);
     }
@@ -311,7 +408,7 @@ export const TuplesTab = ({ storeId, currentModel, authModelId }: TuplesTabProps
                     value={selectedType}
                     onChange={(_, newValue) => {
                       setSelectedType(newValue || '');
-                      setRelation('');
+                      setRelation(null);
                     }}
                     options={availableTypes}
                     renderInput={(params) => <TextField {...params} label="User Type" required />}
@@ -357,21 +454,21 @@ export const TuplesTab = ({ storeId, currentModel, authModelId }: TuplesTabProps
                     sx={{ width: 350 }}
                     value={relation}
                     onChange={(_, newValue) => {
-                      const actualRelation = typeof newValue === 'string' ? newValue : newValue?.id;
-                      setRelation(actualRelation || '');
+                      setRelation(newValue);
+                      setConditionState(null);
                     }}
                     options={availableRelations}
-                    getOptionLabel={(option) => {
-                      if (typeof option === 'string') return option;
-                      return option.label;
-                    }}
-                    freeSolo
+                    getOptionLabel={(option) => option.label}
+                    freeSolo={false}
                     disabled={!selectedType}
                     renderInput={(params) => (
                       <TextField {...params} label="Relation" required />
                     )}
                   />
                 </Box>
+
+                {/* Condition Parameters */}
+                {renderConditionFields()}
 
                 {/* Fourth row - Tuple preview and submit button */}
                 <Paper variant="outlined" sx={{ 
@@ -433,8 +530,35 @@ export const TuplesTab = ({ storeId, currentModel, authModelId }: TuplesTabProps
                           borderRadius: 1
                         }}
                       >
-                        {relation || '<relation>'}
+                        {relation?.label || '<relation>'}
                       </Typography>
+
+                      {conditionState && (
+                        <>
+                          <Typography component="span" color="text.secondary">with</Typography>
+                          {Object.entries(conditionState.context).map(([key, value], i, arr) => (
+                            <React.Fragment key={key}>
+                              <Typography
+                                component="span"
+                                sx={{
+                                  color: "info.main",
+                                  bgcolor: alpha("#0288d1", 0.1),
+                                  px: 1,
+                                  py: 0.5,
+                                  borderRadius: 1,
+                                }}
+                              >
+                                {`${key} as ${value}`}
+                              </Typography>
+                              {i < arr.length - 1 && (
+                                <Typography component="span" color="text.secondary">
+                                  ,{" "}
+                                </Typography>
+                              )}
+                            </React.Fragment>
+                          ))}
+                        </>
+                      )}
                     </Box>
 
                     <Button 
@@ -460,6 +584,7 @@ export const TuplesTab = ({ storeId, currentModel, authModelId }: TuplesTabProps
                   <TableCell>User</TableCell>
                   <TableCell>Relation</TableCell>
                   <TableCell>Object</TableCell>
+                  <TableCell>Condition</TableCell>
                   <TableCell width={100} align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
@@ -469,6 +594,20 @@ export const TuplesTab = ({ storeId, currentModel, authModelId }: TuplesTabProps
                     <TableCell>{tuple.user}</TableCell>
                     <TableCell>{tuple.relation}</TableCell>
                     <TableCell>{tuple.object}</TableCell>
+                    <TableCell>
+                      {tuple.condition ? (
+                        <Box>
+                          <Typography variant="caption" color="text.secondary">
+                            {tuple.condition.name}
+                          </Typography>
+                          <Typography variant="body2">
+                            {Object.entries(tuple.condition.context)
+                              .map(([key, value]) => `${key}: ${value}`)
+                              .join(', ')}
+                          </Typography>
+                        </Box>
+                      ) : null}
+                    </TableCell>
                     <TableCell align="right">
                       <Button
                         size="small"
@@ -476,12 +615,19 @@ export const TuplesTab = ({ storeId, currentModel, authModelId }: TuplesTabProps
                         onClick={async () => {
                           try {
                             setLoading(true);
-                            await OpenFGAService.deleteTuple(storeId, tuple);
+                            await OpenFGAService.deleteTuple(storeId, tuple, authModelId);
                             const response = await OpenFGAService.listTuples(storeId);
                             setTuples(response.tuples);
+                            setNotification({
+                              message: `Successfully deleted tuple: ${tuple.user} ${tuple.relation} ${tuple.object}`,
+                              type: 'success'
+                            });
                           } catch (error) {
                             console.error('Failed to delete tuple:', error);
-                            setError('Failed to delete tuple');
+                            setNotification({
+                              message: 'Failed to delete tuple',
+                              type: 'error'
+                            });
                           } finally {
                             setLoading(false);
                           }
@@ -498,9 +644,9 @@ export const TuplesTab = ({ storeId, currentModel, authModelId }: TuplesTabProps
         </Paper>
 
         <Snackbar 
-          open={!!error} 
+          open={!!notification} 
           autoHideDuration={10000}
-          onClose={() => setError(null)}
+          onClose={() => setNotification(null)}
           anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
           TransitionComponent={SlideTransition}
           sx={{
@@ -511,12 +657,12 @@ export const TuplesTab = ({ storeId, currentModel, authModelId }: TuplesTabProps
           }}
         >
           <Alert 
-            onClose={() => setError(null)} 
-            severity="error" 
+            onClose={() => setNotification(null)} 
+            severity={notification?.type || 'info'}
             variant="filled"
             sx={{ width: '100%' }}
           >
-            {error}
+            {notification?.message}
           </Alert>
         </Snackbar>
       </Box>

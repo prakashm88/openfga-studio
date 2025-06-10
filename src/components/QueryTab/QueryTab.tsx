@@ -545,27 +545,32 @@ export const QueryTab = ({
                           <Typography component="span" color="text.secondary">
                             with
                           </Typography>
-                          {Object.entries(conditionState.context).map(([key, value], i, arr) => (
-                            <React.Fragment key={key}>
-                              <Typography
-                                component="span"
-                                sx={{
-                                  color: "info.main",
-                                  bgcolor: alpha("#0288d1", 0.1),
-                                  px: 1,
-                                  py: 0.5,
-                                  borderRadius: 1,
-                                }}
-                              >
-                                {`${key} as ${value}`}
-                              </Typography>
-                              {i < arr.length - 1 && (
-                                <Typography component="span" color="text.secondary">
-                                  ,{" "}
+                          {Object.entries(conditionState.context).map(
+                            ([key, value], i, arr) => (
+                              <React.Fragment key={key}>
+                                <Typography
+                                  component="span"
+                                  sx={{
+                                    color: "info.main",
+                                    bgcolor: alpha("#0288d1", 0.1),
+                                    px: 1,
+                                    py: 0.5,
+                                    borderRadius: 1,
+                                  }}
+                                >
+                                  {`${key} as ${value}`}
                                 </Typography>
-                              )}
-                            </React.Fragment>
-                          ))}
+                                {i < arr.length - 1 && (
+                                  <Typography
+                                    component="span"
+                                    color="text.secondary"
+                                  >
+                                    ,{" "}
+                                  </Typography>
+                                )}
+                              </React.Fragment>
+                            )
+                          )}
                         </>
                       )}
                       <Typography component="span" color="text.secondary">
@@ -650,20 +655,22 @@ export const QueryTab = ({
             <Snackbar
               open={snackbar.open}
               autoHideDuration={10000}
-              onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+              onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
               anchorOrigin={{ vertical: "top", horizontal: "right" }}
             >
               <Alert
-                onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+                onClose={() =>
+                  setSnackbar((prev) => ({ ...prev, open: false }))
+                }
                 severity={snackbar.severity}
                 variant="filled"
-                sx={{ 
+                sx={{
                   width: "100%",
                   "& .MuiAlert-message": {
                     display: "flex",
                     alignItems: "center",
-                    gap: 2
-                  }
+                    gap: 2,
+                  },
                 }}
               >
                 <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
@@ -698,8 +705,20 @@ export const QueryTab = ({
                   onClick={() => handleReplayQuery(query)}
                 >
                   <Typography variant="body1" color="text.secondary">
-                    {query.queryText ||
-                      `${query.query.user} - ${query.query.relation} - ${query.query.object}`}
+                    {query.queryText || (
+                      <Box component="span">
+                        {`${query.query.user} - ${query.query.relation} - ${query.query.object}`}
+                        {query.query.condition && (
+                          <>
+                            &nbsp;with {query.query.condition.name} (
+                            {Object.entries(query.query.condition.context)
+                              .map(([key, value]) => `${key}: ${value}`)
+                              .join(", ")}
+                            )
+                          </>
+                        )}
+                      </Box>
+                    )}
                   </Typography>
 
                   <Alert
