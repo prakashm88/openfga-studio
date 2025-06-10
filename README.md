@@ -25,7 +25,7 @@ I built OpenFGA Studio to address these limitations and provide:
 - Customizable interface for specific needs
 - Seamless integration with existing systems
 
-This tool streamlines the process of creating, testing, and managing authorization models, making complex authorization logic more accessible and manageable. Built with modern web technologies including React, TypeScript, and Material-UI, it provides a robust and intuitive interface for working with OpenFGA.
+OpenFGA Studio streamlines the process of creating, testing, and managing authorization models, making complex authorization logic more accessible and manageable. Built with modern web technologies including React, TypeScript, and Material-UI, it provides a robust and intuitive interface for working with OpenFGA.
 
 ![OpenFGA Studio Dark Mode](screenshots/0-screenshot.png)
 ![OpenFGA Studio Light Mode](screenshots/0-screenshot-light-mode.png)
