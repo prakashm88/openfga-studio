@@ -5,16 +5,40 @@ interface TypeMetadata {
   relations: Array<string>;
   userTypes: Map<string, Array<string>>;
   allowDirectInput?: boolean;
+  conditions?: Map<string, {
+    name: string;
+    parameters: {
+      [key: string]: {
+        type_name: string;
+      };
+    };
+    expression: string;
+  }>;
 }
 
 export interface RelationshipMetadata {
   types: Map<string, TypeMetadata>;
+  conditions?: {
+    [key: string]: {
+      name: string;
+      parameters: {
+        [key: string]: {
+          type_name: string;
+        };
+      };
+      expression: string;
+    };
+  };
 }
 
 export interface RelationshipTuple {
   user: string;
   relation: string;
   object: string;
+  condition?: {
+    name: string;
+    context: Record<string, string | number | boolean>;
+  };
 }
 
 interface RelationDefinition {
@@ -52,6 +76,17 @@ interface TypeDefinition {
 
 interface AuthorizationModel {
   type_definitions: TypeDefinition[];
+  conditions?: {
+    [key: string]: {
+      name: string;
+      parameters: {
+        [key: string]: {
+          type_name: string;
+        };
+      };
+      expression: string;
+    };
+  };
 }
 
 export function formatTupleUser(user: string, suggestedType?: string): string {
@@ -75,16 +110,23 @@ export function parseTupleObject(object: string): { type: string; id: string } {
 
 export function extractRelationshipMetadata(modelStr: string): RelationshipMetadata {
   const types = new Map<string, TypeMetadata>();
+  let conditions: RelationshipMetadata['conditions'];
   
   try {
     // Try to parse as JSON first
     const model = JSON.parse(modelStr) as AuthorizationModel;
+    
+    // Extract conditions if they exist
+    if (model.conditions) {
+      conditions = model.conditions;
+    }
     
     model.type_definitions.forEach((typeDef: TypeDefinition) => {
       const typeMetadata: TypeMetadata = {
         type: typeDef.type,
         relations: [],
         userTypes: new Map(),
+        conditions: new Map(),
         allowDirectInput: true
       };
 
@@ -99,16 +141,16 @@ export function extractRelationshipMetadata(modelStr: string): RelationshipMetad
           directTypes.forEach(dt => {
             // Add the type with proper formatting
             if (dt.relation) {
-              // For relations like group#member
               userTypes.add(`${dt.type}#${dt.relation}`);
             } else if (dt.wildcard) {
-              // For wildcard types like user:*
               userTypes.add(`${dt.type}:*`);
             } else if (dt.condition) {
-              // For conditional types
               userTypes.add(`${dt.type} with ${dt.condition}`);
+              // Store condition info if available
+              if (conditions?.[dt.condition]) {
+                typeMetadata.conditions?.set(relationName, conditions[dt.condition]);
+              }
             } else {
-              // For direct types like user, group, folder
               userTypes.add(`${dt.type}`);
             }
           });
@@ -117,7 +159,6 @@ export function extractRelationshipMetadata(modelStr: string): RelationshipMetad
           if (userTypes.size > 0) {
             typeMetadata.userTypes.set(relationName, Array.from(userTypes));
           } else {
-            // Default to accepting user type if no explicit types are defined
             typeMetadata.userTypes.set(relationName, ['user']);
           }
         });
@@ -126,15 +167,7 @@ export function extractRelationshipMetadata(modelStr: string): RelationshipMetad
       types.set(typeDef.type, typeMetadata);
     });
 
-    types.forEach((typeMetadata) => {
-      typeMetadata.relations.forEach(relationName => {
-        if (!typeMetadata.userTypes.has(relationName)) {
-          typeMetadata.userTypes.set(relationName, ['user']);
-        }
-      });
-    });
-
-    return { types };
+    return { types, conditions };
   } catch (error: unknown) {
     // If JSON parse fails, try DSL format
     try {
