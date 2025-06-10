@@ -24,7 +24,7 @@ export const AuthModelEditor = ({ value, onChange }: AuthModelEditorProps) => {
   }, [theme.palette.background.paper]);
 
   return (
-    <div style={{ height: '600px', border: `1px solid ${theme.palette.divider}` }}>
+    <div style={{ height: '99%', border: `1px solid ${theme.palette.divider}` }}>
       <Editor
         height="100%"
         defaultLanguage="yaml"
