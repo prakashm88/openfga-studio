@@ -19,7 +19,7 @@ export const AppHeader = ({ selectedStore, onStoreChange, onToggleTheme }: AppHe
         <img src="/openfga.svg" alt="OpenFGA Logo" style={{ height: 32, marginRight: 8 }} />
       </Box>
         <Typography variant="h6" component="div" sx={{ flexGrow: 0, mr: 4 }}>
-          OpenFGA Playground
+          OpenFGA Studio
         </Typography>
         <Box sx={{ flexGrow: 1 }}>
           <StoreSelect
