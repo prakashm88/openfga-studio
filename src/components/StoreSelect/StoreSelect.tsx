@@ -12,7 +12,6 @@ import {
   Select,
   MenuItem,
   FormControl,
-  InputLabel,
   Typography
 } from '@mui/material';
 import { OpenFGAService } from '../../services/OpenFGAService';

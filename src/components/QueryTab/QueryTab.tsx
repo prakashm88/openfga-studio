@@ -49,11 +49,11 @@ interface ConditionState {
   context: Record<string, string | number | boolean>;
 }
 
-export const QueryTab = ({
+function QueryTab({
   storeId,
   currentModel,
   authModelId,
-}: QueryTabProps) => {
+}: QueryTabProps) {
   const [metadata, setMetadata] = useState<RelationshipMetadata>();
   const [queryMode, setQueryMode] = useState<"form" | "text">("form");
   const [selectedType, setSelectedType] = useState("");
@@ -775,3 +775,5 @@ export const QueryTab = ({
     </Box>
   );
 };
+
+export default QueryTab;
