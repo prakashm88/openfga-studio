@@ -1,0 +1,1 @@
+podman stop openfga-playground || true && podman rm openfga-playground || true && podman build --format docker -t openfga-studio:latest . && podman run -d --name openfga-playground -p 3000:3000 -p 8080:8080 -p 8081:8081 -p 8090:8090 localhost/openfga-studio:latest
