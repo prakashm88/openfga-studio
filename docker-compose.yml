@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  openfga-studio:
+    build: .
+    ports:
+      - "3000:3000"  # Nginx (Static content + Reverse Proxy)
+    environment:
+      - OPENFGA_DATASTORE_ENGINE=memory
+      - OPENFGA_PLAYGROUND_ENABLED=false
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped

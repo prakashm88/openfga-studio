@@ -14,7 +14,7 @@ import ReactFlow, {
   Panel,
   MarkerType
 } from 'reactflow';
-import { useTheme, IconButton, Tooltip, Typography } from '@mui/material';
+import { useTheme, IconButton, Tooltip } from '@mui/material';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import { toPng } from 'html-to-image';
 import { CustomNode } from './CustomNode';
@@ -50,7 +50,7 @@ const DownloadButton = () => {
   const theme = useTheme();
 
   const downloadImage = useCallback(async () => {
-    const flow = document.querySelector('.react-flow');
+    const flow = document.querySelector('.react-flow') as HTMLElement;
     if (!flow) return;
 
     const nodes = getNodes();

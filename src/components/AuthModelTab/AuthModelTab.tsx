@@ -15,11 +15,10 @@ interface AuthModelTabProps {
   storeId: string;
   storeName: string;
   initialModel: string;
-  authModelId: string;
   onModelUpdate: (model: string) => void;
 }
 
-export const AuthModelTab = ({ storeId, storeName, initialModel, authModelId, onModelUpdate }: AuthModelTabProps) => {
+export default function AuthModelTab({ storeId, storeName, initialModel, onModelUpdate }: AuthModelTabProps) {
   const [authModel, setAuthModel] = useState(initialModel);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
@@ -87,16 +86,26 @@ export const AuthModelTab = ({ storeId, storeName, initialModel, authModelId, on
         // Convert DSL to JSON for download
         const jsonModel = dslToJson(authModel);
         jsonContent = JSON.stringify(jsonModel, null, 2);
+        const blob = new Blob([jsonContent], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'authorization-model.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } else {
+        const blob = new Blob([jsonContent], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'authorization-model.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
       }
-      const blob = new Blob([jsonContent], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'authorization-model.json';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Failed to download JSON:', error);
     }

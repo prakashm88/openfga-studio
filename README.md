@@ -30,6 +30,10 @@ OpenFGA Studio streamlines the process of creating, testing, and managing author
 ![OpenFGA Studio Dark Mode](screenshots/0-screenshot.png)
 ![OpenFGA Studio Light Mode](screenshots/0-screenshot-light-mode.png)
 
+## Development
+
+👉 For detailed development instructions, see [DEVELOPMENT.md](DEVELOPMENT.md)
+
 ## Key Features
 
 ### 1. Store Management

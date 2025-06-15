@@ -61,7 +61,7 @@ function SlideTransition(props: SlideProps) {
   return <Slide {...props} direction="left" />;
 }
 
-export const TuplesTab = ({ storeId, currentModel, authModelId }: TuplesTabProps) => {
+export default function TuplesTab({ storeId, currentModel, authModelId }: TuplesTabProps) {
   const [tuples, setTuples] = useState<RelationshipTuple[]>([]);
   const [metadata, setMetadata] = useState<RelationshipMetadata | undefined>();
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);

@@ -1,11 +1,12 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, Suspense, lazy } from 'react';
 import { Box, CssBaseline, ThemeProvider, createTheme, Tabs, Tab } from '@mui/material';
 import { AppHeader } from './components/AppHeader/AppHeader';
-import { AuthModelTab } from './components/AuthModelTab/AuthModelTab';
-import { TuplesTab } from './components/TuplesTab/TuplesTab';
 import { OpenFGAService } from './services/OpenFGAService';
-import { QueryTab } from './components/QueryTab/QueryTab';
 import './App.css';
+
+const AuthModelTab = lazy(() => import('./components/AuthModelTab/AuthModelTab'));
+const TuplesTab = lazy(() => import('./components/TuplesTab/TuplesTab'));
+const QueryTab = lazy(() => import('./components/QueryTab/QueryTab'));
 
 function App() {
   const [activeTab, setActiveTab] = useState(0);
@@ -93,25 +94,30 @@ function App() {
                   overflow: 'hidden'
                 }}>
                   {activeTab === 0 ? (
-                    <AuthModelTab 
-                      storeId={selectedStoreId}
-                      storeName={selectedStoreName}
-                      initialModel={authModel}
-                      authModelId={authModelId}
-                      onModelUpdate={setAuthModel}
-                    />
+                    <Suspense fallback={<div>Loading...</div>}>
+                      <AuthModelTab 
+                        storeId={selectedStoreId}
+                        storeName={selectedStoreName}
+                        initialModel={authModel}
+                        onModelUpdate={setAuthModel}
+                      />
+                    </Suspense>
                   ) : activeTab === 1 ? (
-                    <TuplesTab 
-                      storeId={selectedStoreId} 
-                      currentModel={authModel}
-                      authModelId={authModelId}
-                    />
+                    <Suspense fallback={<div>Loading...</div>}>
+                      <TuplesTab 
+                        storeId={selectedStoreId} 
+                        currentModel={authModel}
+                        authModelId={authModelId}
+                      />
+                    </Suspense>
                   ) : (
-                    <QueryTab
-                      storeId={selectedStoreId}
-                      currentModel={authModel}
-                      authModelId={authModelId}
-                    />
+                    <Suspense fallback={<div>Loading...</div>}>
+                      <QueryTab
+                        storeId={selectedStoreId}
+                        currentModel={authModel}
+                        authModelId={authModelId}
+                      />
+                    </Suspense>
                   )}
                 </Box>
               </Box>
