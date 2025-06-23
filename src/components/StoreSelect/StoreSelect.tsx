@@ -95,8 +95,8 @@ export const StoreSelect = ({ selectedStore, onStoreChange }: StoreSelectProps) 
   }
 
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 200 }}>
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%', maxWidth: 600 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 1 }}>
         {error && (
           <Alert 
             severity="error" 
@@ -106,7 +106,9 @@ export const StoreSelect = ({ selectedStore, onStoreChange }: StoreSelectProps) 
               top: 72,
               zIndex: 1400,
               minWidth: 300,
-              boxShadow: (theme) => theme.shadows[3],
+              maxWidth: 500,
+              borderRadius: 3,
+              boxShadow: 3,
               animation: 'slideIn 0.3s ease-out',
             }}
           >
@@ -114,8 +116,8 @@ export const StoreSelect = ({ selectedStore, onStoreChange }: StoreSelectProps) 
           </Alert>
         )}
         
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-          <FormControl size="small" sx={{ minWidth: 200 }}>
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <FormControl size="small" sx={{ minWidth: 280, flex: 1 }}>
             <Select
               value={selectedStore || ''}
               onChange={(e) => {
@@ -126,22 +128,52 @@ export const StoreSelect = ({ selectedStore, onStoreChange }: StoreSelectProps) 
               }}
               disabled={loading}
               displayEmpty
+              sx={{
+                borderRadius: 2,
+                bgcolor: 'background.paper',
+                '& .MuiOutlinedInput-notchedOutline': {
+                  borderColor: 'divider',
+                },
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  borderColor: 'primary.main',
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: 'primary.main',
+                  borderWidth: 2,
+                },
+              }}
             >
               {stores.length === 0 ? (
-                <MenuItem value="" disabled>No stores available</MenuItem>
+                <MenuItem value="" disabled>
+                  <Typography color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                    No stores available
+                  </Typography>
+                </MenuItem>
               ) : (
                 stores.map((store) => (
                   <MenuItem key={store.id} value={store.id}>
-                    <Typography>
-                      {store.name} <Typography component="span" color="text.secondary">({store.id})</Typography>
-                    </Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                      <Typography sx={{ fontWeight: 500 }}>
+                        {store.name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {store.id}
+                      </Typography>
+                    </Box>
                   </MenuItem>
                 ))
               )}
             </Select>
           </FormControl>
           
-          {loading && <CircularProgress size={16} />}
+          {loading && (
+            <CircularProgress 
+              size={20} 
+              sx={{ 
+                color: 'primary.main'
+              }} 
+            />
+          )}
 
           <Button 
             onClick={handleRefresh} 
@@ -149,27 +181,37 @@ export const StoreSelect = ({ selectedStore, onStoreChange }: StoreSelectProps) 
             size="small"
             variant="outlined"
             sx={{
+              borderRadius: 2,
               borderColor: 'divider',
+              minWidth: 80,
+              fontWeight: 500,
+              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
               '&:hover': {
-                borderColor: 'primary.main'
+                borderColor: 'primary.main',
+                transform: 'translateY(-1px)',
+                boxShadow: 1,
               }
             }}
           >
-            Refresh
+            🔄 Refresh
           </Button>
           
           <Button
-            variant="outlined"
+            variant="contained"
             size="small"
             onClick={() => setIsCreateDialogOpen(true)}
             sx={{
-              borderColor: 'divider',
+              borderRadius: 2,
+              minWidth: 100,
+              fontWeight: 600,
+              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
               '&:hover': {
-                borderColor: 'primary.main'
+                transform: 'translateY(-1px)',
+                boxShadow: 2,
               }
             }}
           >
-            New Store
+            ➕ New Store
           </Button>
         </Box>
       </Box>
@@ -177,15 +219,26 @@ export const StoreSelect = ({ selectedStore, onStoreChange }: StoreSelectProps) 
       <Dialog 
         open={isCreateDialogOpen} 
         onClose={() => setIsCreateDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
         PaperProps={{
           sx: {
             bgcolor: 'background.paper',
-            backgroundImage: 'none'
+            backgroundImage: 'none',
+            borderRadius: 3,
+            boxShadow: 4,
           }
         }}
       >
-        <DialogTitle>Create New Store</DialogTitle>
-        <DialogContent>
+        <DialogTitle sx={{ 
+          pb: 1,
+          fontSize: '1.25rem',
+          fontWeight: 600,
+          color: '#79ED83', // OpenFGA green
+        }}>
+          🏪 Create New Store
+        </DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
           <TextField
             autoFocus
             margin="dense"
@@ -194,22 +247,36 @@ export const StoreSelect = ({ selectedStore, onStoreChange }: StoreSelectProps) 
             variant="outlined"
             value={newStoreName}
             onChange={(e) => setNewStoreName(e.target.value)}
+            placeholder="Enter a descriptive name for your store"
             sx={{
               mt: 1,
               '& .MuiOutlinedInput-root': {
+                borderRadius: 2,
                 '& fieldset': {
                   borderColor: 'divider'
+                },
+                '&:hover fieldset': {
+                  borderColor: 'primary.main'
+                },
+                '&.Mui-focused fieldset': {
+                  borderColor: 'primary.main',
+                  borderWidth: 2
                 }
               }
             }}
           />
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ p: 3, pt: 2 }}>
           <Button 
             onClick={() => setIsCreateDialogOpen(false)}
+            variant="outlined"
             sx={{
+              borderRadius: 2,
+              borderColor: 'divider',
               color: 'text.secondary',
+              fontWeight: 500,
               '&:hover': {
+                borderColor: 'text.secondary',
                 color: 'text.primary'
               }
             }}
@@ -220,8 +287,14 @@ export const StoreSelect = ({ selectedStore, onStoreChange }: StoreSelectProps) 
             onClick={handleCreateStore}
             disabled={!newStoreName.trim() || creatingStore}
             variant="contained"
+            sx={{
+              borderRadius: 2,
+              fontWeight: 600,
+              minWidth: 100,
+              ml: 1
+            }}
           >
-            {creatingStore ? 'Creating...' : 'Create'}
+            {creatingStore ? '⏳ Creating...' : '✅ Create'}
           </Button>
         </DialogActions>
       </Dialog>
