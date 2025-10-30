@@ -1,5 +1,6 @@
 // OpenFGA API service
 import axios from 'axios';
+import { config } from '../config';
 import { dslToJson, jsonToDsl } from '../utils/modelConverter'; 
 
 // Create axios instance with common config
@@ -8,6 +9,7 @@ const api = axios.create({
   headers: {
     'Accept': 'application/json',
     'Content-Type': 'application/json',
+    ...(config.apiToken ? { Authorization: `Bearer ${config.apiToken}` } : {}),
   }
 });
 
@@ -74,13 +76,6 @@ export class OpenFGAService {
 
   static async listTuples(storeId: string): Promise<{ tuples: RelationshipTuple[] }> {
     try {
-      const response = await api.post(`/stores/${storeId}/read`, {}, {
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        }
-      });
-
       // Transform the response to match our RelationshipTuple interface
       interface TupleResponse {
         key: {
@@ -95,8 +90,38 @@ export class OpenFGAService {
         timestamp: string;
       }
 
+      let allTuples: TupleResponse[] = [];
+      let continuationToken: string | undefined = undefined;
+
+      // Fetch all pages of tuples
+      do {
+        const requestBody: {
+          page_size?: number;
+          continuation_token?: string;
+        } = {
+          page_size: 100 // Maximum allowed by OpenFGA API
+        };
+
+        if (continuationToken) {
+          requestBody.continuation_token = continuationToken;
+        }
+
+        const response = await api.post(`/stores/${storeId}/read`, requestBody, {
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
+        });
+
+        const pageTuples = response.data.tuples || [];
+        allTuples = allTuples.concat(pageTuples);
+
+        // Check if there's a continuation token for the next page
+        continuationToken = response.data.continuation_token;
+      } while (continuationToken);
+
       // Sort tuples by timestamp in descending order (latest first)
-      const sortedTuples = [...(response.data.tuples || [])].sort((a: TupleResponse, b: TupleResponse) => {
+      const sortedTuples = [...allTuples].sort((a: TupleResponse, b: TupleResponse) => {
         return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
       });
 
