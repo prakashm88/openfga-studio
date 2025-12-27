@@ -72,9 +72,13 @@ export class OpenFGAService {
     }
   }
 
-  static async listTuples(storeId: string): Promise<{ tuples: RelationshipTuple[] }> {
+  static async listTuples(storeId: string, options?: { page_size?: number; continuation_token?: string }): Promise<{ tuples: RelationshipTuple[]; continuation_token?: string }> {
     try {
-      const response = await api.post(`/stores/${storeId}/read`, {}, {
+      const requestBody: { page_size?: number; continuation_token?: string } = {};
+      if (options?.page_size) requestBody.page_size = options.page_size;
+      if (options?.continuation_token) requestBody.continuation_token = options.continuation_token;
+
+      const response = await api.post(`/stores/${storeId}/read`, requestBody, {
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json'
@@ -107,10 +111,10 @@ export class OpenFGAService {
         condition: tuple.key.condition
       }));
 
-      return { tuples };
+      return { tuples, continuation_token: response.data.continuation_token };
     } catch (error) {
       console.error('Failed to list tuples:', error);
-      return { tuples: [] };
+      return { tuples: [], continuation_token: undefined };
     }
   }
 
