@@ -18,6 +18,8 @@ import {
   Typography,
   Slide,
   alpha,
+  Select,
+  MenuItem,
   type SlideProps
 } from '@mui/material';
 import { OpenFGAService } from '../../services/OpenFGAService';
@@ -67,7 +69,12 @@ export default function TuplesTab({ storeId, currentModel, authModelId }: Tuples
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [mode, setMode] = useState<'assisted' | 'freeform'>('assisted');
   const [loading, setLoading] = useState(false);
-  
+
+  // Pagination state (infinite load more)
+  const [pageSize, setPageSize] = useState<number>(10);
+  const [continuationToken, setContinuationToken] = useState<string | undefined>(undefined);
+  const [loadingMore, setLoadingMore] = useState<boolean>(false);
+
   // Form state for freeform mode
   const [freeformUser, setFreeformUser] = useState('');
   const [freeformRelation, setFreeformRelation] = useState('');
@@ -142,8 +149,10 @@ export default function TuplesTab({ storeId, currentModel, authModelId }: Tuples
     const loadData = async () => {
       try {
         setLoading(true);
-        const tuplesResponse = await OpenFGAService.listTuples(storeId);
+        // Load first page with current pageSize
+        const tuplesResponse = await OpenFGAService.listTuples(storeId, { page_size: pageSize });
         setTuples(tuplesResponse.tuples);
+        setContinuationToken(tuplesResponse.continuation_token);
 
         if (currentModel) {
           const meta = extractRelationshipMetadata(currentModel);
@@ -161,7 +170,7 @@ export default function TuplesTab({ storeId, currentModel, authModelId }: Tuples
     };
 
     loadData();
-  }, [storeId, currentModel]);
+  }, [storeId, currentModel, pageSize]);
 
   // Render condition parameters UI
   const renderConditionFields = () => {
@@ -233,9 +242,10 @@ export default function TuplesTab({ storeId, currentModel, authModelId }: Tuples
       setSelectedObjectType('');
       setConditionState(null);
 
-      // Reload tuples
-      const response = await OpenFGAService.listTuples(storeId);
+      // Reload tuples (reload first page with current pageSize)
+      const response = await OpenFGAService.listTuples(storeId, { page_size: pageSize });
       setTuples(response.tuples);
+      setContinuationToken(response.continuation_token);
 
       setNotification({
         message: `Successfully added tuple: ${formattedUser} ${relation.id} ${formattedObject}`,
@@ -270,9 +280,10 @@ export default function TuplesTab({ storeId, currentModel, authModelId }: Tuples
       setFreeformRelation('');
       setFreeformObject('');
 
-      // Reload tuples
-      const response = await OpenFGAService.listTuples(storeId);
+      // Reload tuples (reload first page with current pageSize)
+      const response = await OpenFGAService.listTuples(storeId, { page_size: pageSize });
       setTuples(response.tuples);
+      setContinuationToken(response.continuation_token);
 
       setNotification({
         message: `Successfully added tuple: ${freeformUser} ${freeformRelation} ${freeformObject}`,
@@ -577,7 +588,35 @@ export default function TuplesTab({ storeId, currentModel, authModelId }: Tuples
 
         {/* Tuples table */}
         <Paper variant="outlined" sx={{ borderRadius: 1 }}>
-          <TableContainer sx={{ maxHeight: 'calc(100vh - 400px)' }}>
+          {/* Header: page size selector */}
+          <Box sx={{
+            p: 2,
+            borderBottom: 1,
+            borderColor: 'divider',
+            bgcolor: 'background.default',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}>
+            <Typography variant="subtitle2" color="text.secondary">Tuples</Typography>
+
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="body2" color="text.secondary">Page size:</Typography>
+              <Select
+                size="small"
+                value={pageSize}
+                onChange={(e) => { setPageSize(Number(e.target.value)); setContinuationToken(undefined); setTuples([]); }}
+                sx={{ minWidth: 80 }}
+              >
+                <MenuItem value={10}>10</MenuItem>
+                <MenuItem value={25}>25</MenuItem>
+                <MenuItem value={50}>50</MenuItem>
+                <MenuItem value={100}>100</MenuItem>
+              </Select>
+            </Box>
+          </Box>
+
+          <TableContainer>
             <Table stickyHeader>
               <TableHead>
                 <TableRow>
@@ -616,8 +655,10 @@ export default function TuplesTab({ storeId, currentModel, authModelId }: Tuples
                           try {
                             setLoading(true);
                             await OpenFGAService.deleteTuple(storeId, tuple, authModelId);
-                            const response = await OpenFGAService.listTuples(storeId);
+                            // After delete, reload first page
+                            const response = await OpenFGAService.listTuples(storeId, { page_size: pageSize });
                             setTuples(response.tuples);
+                            setContinuationToken(response.continuation_token);
                             setNotification({
                               message: `Successfully deleted tuple: ${tuple.user} ${tuple.relation} ${tuple.object}`,
                               type: 'success'
@@ -638,6 +679,32 @@ export default function TuplesTab({ storeId, currentModel, authModelId }: Tuples
                     </TableCell>
                   </TableRow>
                 ))}
+
+                {/* Load more row */}
+                <TableRow>
+                  <TableCell colSpan={5} align="center">
+                    <Button
+                      variant="outlined"
+                      onClick={async () => {
+                        if (!continuationToken) return;
+                        try {
+                          setLoadingMore(true);
+                          const response = await OpenFGAService.listTuples(storeId, { page_size: pageSize, continuation_token: continuationToken });
+                          setTuples(prev => [...prev, ...response.tuples]);
+                          setContinuationToken(response.continuation_token);
+                        } catch (error) {
+                          console.error('Failed to load more tuples:', error);
+                          setNotification({ message: 'Failed to load more tuples', type: 'error' });
+                        } finally {
+                          setLoadingMore(false);
+                        }
+                      }}
+                      disabled={!continuationToken || loadingMore}
+                    >
+                      {loadingMore ? 'Loading...' : (continuationToken ? 'Load more' : 'No more tuples')}
+                    </Button>
+                  </TableCell>
+                </TableRow>
               </TableBody>
             </Table>
           </TableContainer>
