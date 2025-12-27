@@ -586,3 +586,17 @@ Query for validation
 
 is user:prakash related to group:prak-groups as member?
 is user:amr related to group:prak-groups as owner?
+
+
+Tuple with condition
+---------
+
+Write 
+
+{"writes":{"tuple_keys":[{"user":"user:kkkk","relation":"tmpviewer","object":"folder:my-folder","condition":{"name":"non_expired_grant","context":{"grant_time":"2025-12-28T00:00:00Z","grant_duration":"10m"}}}]},"authorization_model_id":"01KDGFBG4D82W10JY40YKPKVX0"}
+
+Check
+
+{"tuple_key":{"user":"user:kkkk","relation":"tmpviewer","object":"folder:my-folder"},"context":{"current_time":"2023-01-01T00:10:01Z","grant_duration":"-","grant_time":"-"},"authorization_model_id":"01KDGFBG4D82W10JY40YKPKVX0"}
+
+Can user:kkkk access folder:my-folder as tmpviewer with current_time as 2023-01-01T00:10:01Z, grant_duration as -, grant_time as -?
