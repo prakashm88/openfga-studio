@@ -18,6 +18,7 @@ import {
   Typography,
   Slide,
   alpha,
+  TablePagination,
   type SlideProps
 } from '@mui/material';
 import { OpenFGAService } from '../../services/OpenFGAService';
@@ -68,6 +69,10 @@ export default function TuplesTab({ storeId, currentModel, authModelId }: Tuples
   const [mode, setMode] = useState<'assisted' | 'freeform'>('assisted');
   const [loading, setLoading] = useState(false);
   
+  // Pagination state
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
+
   // Form state for freeform mode
   const [freeformUser, setFreeformUser] = useState('');
   const [freeformRelation, setFreeformRelation] = useState('');
@@ -86,6 +91,23 @@ export default function TuplesTab({ storeId, currentModel, authModelId }: Tuples
     metadata ? Array.from(metadata.types.keys()) : [], 
     [metadata]
   );
+
+  // Paginated tuples
+  const paginatedTuples = useMemo(() => {
+    const start = page * rowsPerPage;
+    const end = start + rowsPerPage;
+    return tuples.slice(start, end);
+  }, [tuples, page, rowsPerPage]);
+
+  // Handlers for pagination
+  const handleChangePage = (_event: unknown, newPage: number) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
 
   // Get possible target object types based on the model
   const possibleObjectTypes = useMemo(() => {
@@ -144,6 +166,7 @@ export default function TuplesTab({ storeId, currentModel, authModelId }: Tuples
         setLoading(true);
         const tuplesResponse = await OpenFGAService.listTuples(storeId);
         setTuples(tuplesResponse.tuples);
+        setPage(0); // Reset to first page
 
         if (currentModel) {
           const meta = extractRelationshipMetadata(currentModel);
@@ -236,6 +259,7 @@ export default function TuplesTab({ storeId, currentModel, authModelId }: Tuples
       // Reload tuples
       const response = await OpenFGAService.listTuples(storeId);
       setTuples(response.tuples);
+      setPage(0); // Reset to first page
 
       setNotification({
         message: `Successfully added tuple: ${formattedUser} ${relation.id} ${formattedObject}`,
@@ -273,6 +297,7 @@ export default function TuplesTab({ storeId, currentModel, authModelId }: Tuples
       // Reload tuples
       const response = await OpenFGAService.listTuples(storeId);
       setTuples(response.tuples);
+      setPage(0); // Reset to first page
 
       setNotification({
         message: `Successfully added tuple: ${freeformUser} ${freeformRelation} ${freeformObject}`,
@@ -577,7 +602,25 @@ export default function TuplesTab({ storeId, currentModel, authModelId }: Tuples
 
         {/* Tuples table */}
         <Paper variant="outlined" sx={{ borderRadius: 1 }}>
-          <TableContainer sx={{ maxHeight: 'calc(100vh - 400px)' }}>
+          {/* Total count header */}
+          <Box sx={{
+            p: 2,
+            borderBottom: 1,
+            borderColor: 'divider',
+            bgcolor: 'background.default',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+            <Typography variant="subtitle2" color="text.secondary">
+              Total Tuples: <strong>{tuples.length}</strong>
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Showing {tuples.length === 0 ? 0 : page * rowsPerPage + 1} - {Math.min((page + 1) * rowsPerPage, tuples.length)} of {tuples.length}
+            </Typography>
+          </Box>
+
+          <TableContainer sx={{ maxHeight: 'calc(100vh - 500px)' }}>
             <Table stickyHeader>
               <TableHead>
                 <TableRow>
@@ -589,7 +632,7 @@ export default function TuplesTab({ storeId, currentModel, authModelId }: Tuples
                 </TableRow>
               </TableHead>
               <TableBody>
-                {tuples.map((tuple, index) => (
+                {paginatedTuples.map((tuple, index) => (
                   <TableRow key={index}>
                     <TableCell>{tuple.user}</TableCell>
                     <TableCell>{tuple.relation}</TableCell>
@@ -618,6 +661,7 @@ export default function TuplesTab({ storeId, currentModel, authModelId }: Tuples
                             await OpenFGAService.deleteTuple(storeId, tuple, authModelId);
                             const response = await OpenFGAService.listTuples(storeId);
                             setTuples(response.tuples);
+                            setPage(0); // Reset to first page
                             setNotification({
                               message: `Successfully deleted tuple: ${tuple.user} ${tuple.relation} ${tuple.object}`,
                               type: 'success'
@@ -641,6 +685,19 @@ export default function TuplesTab({ storeId, currentModel, authModelId }: Tuples
               </TableBody>
             </Table>
           </TableContainer>
+
+          {/* Pagination */}
+          <TablePagination
+            component="div"
+            count={tuples.length}
+            page={page}
+            onPageChange={handleChangePage}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+            rowsPerPageOptions={[10, 25, 50, 100, 500]}
+            labelRowsPerPage="Rows per page:"
+            labelDisplayedRows={({ from, to, count }) => `${from}-${to} of ${count}`}
+          />
         </Paper>
 
         <Snackbar 
