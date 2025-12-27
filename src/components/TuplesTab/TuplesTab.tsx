@@ -79,6 +79,7 @@ export default function TuplesTab({ storeId, currentModel, authModelId }: Tuples
   const [freeformUser, setFreeformUser] = useState('');
   const [freeformRelation, setFreeformRelation] = useState('');
   const [freeformObject, setFreeformObject] = useState('');
+  const [freeformCondition, setFreeformCondition] = useState('');
   
   // Form state for assisted mode
   const [selectedType, setSelectedType] = useState('');
@@ -269,16 +270,30 @@ export default function TuplesTab({ storeId, currentModel, authModelId }: Tuples
       setNotification(null);
       setLoading(true);
 
-      await OpenFGAService.writeTuple(storeId, {
+      // Parse freeform condition if provided
+      let conditionData = null;
+      if (freeformCondition.trim()) {
+        try {
+          conditionData = JSON.parse(freeformCondition);
+        } catch (e) {
+          throw new Error('Invalid condition format. Please provide valid JSON.');
+        }
+      }
+
+      const tuple: RelationshipTuple = {
         user: freeformUser,
         relation: freeformRelation,
-        object: freeformObject
-      }, authModelId);
+        object: freeformObject,
+        ...(conditionData ? { condition: conditionData } : {})
+      };
+
+      await OpenFGAService.writeTuple(storeId, tuple, authModelId);
 
       // Reset form
       setFreeformUser('');
       setFreeformRelation('');
       setFreeformObject('');
+      setFreeformCondition('');
 
       // Reload tuples (reload first page with current pageSize)
       const response = await OpenFGAService.listTuples(storeId, { page_size: pageSize });
@@ -366,38 +381,58 @@ export default function TuplesTab({ storeId, currentModel, authModelId }: Tuples
               // Freeform mode
               <Box sx={{ 
                 display: 'flex', 
+                flexDirection: 'column',
                 gap: 2, 
                 alignItems: 'flex-start',
-                flexWrap: 'wrap',
                 width: '100%'
               }}>
-                <TextField
-                  size="small"
-                  sx={{ width: 250 }}
-                  label="User"
-                  value={freeformUser}
-                  onChange={(e) => setFreeformUser(e.target.value)}
-                  required
-                  helperText="Format: type:id or type#relation@id"
-                />
-                
-                <TextField
-                  size="small"
-                  sx={{ width: 250 }}
-                  label="Relation"
-                  value={freeformRelation}
-                  onChange={(e) => setFreeformRelation(e.target.value)}
-                  required
-                />
+                <Box sx={{ 
+                  display: 'flex', 
+                  gap: 2, 
+                  alignItems: 'flex-start',
+                  flexWrap: 'wrap',
+                  width: '100%'
+                }}>
+                  <TextField
+                    size="small"
+                    sx={{ width: 250 }}
+                    label="User"
+                    value={freeformUser}
+                    onChange={(e) => setFreeformUser(e.target.value)}
+                    required
+                    helperText="Format: type:id or type#relation@id"
+                  />
+                  
+                  <TextField
+                    size="small"
+                    sx={{ width: 250 }}
+                    label="Relation"
+                    value={freeformRelation}
+                    onChange={(e) => setFreeformRelation(e.target.value)}
+                    required
+                  />
+
+                  <TextField
+                    size="small"
+                    sx={{ width: 250 }}
+                    label="Object"
+                    value={freeformObject}
+                    onChange={(e) => setFreeformObject(e.target.value)}
+                    required
+                    helperText="Format: type:id"
+                  />
+                </Box>
 
                 <TextField
                   size="small"
-                  sx={{ width: 250 }}
-                  label="Object"
-                  value={freeformObject}
-                  onChange={(e) => setFreeformObject(e.target.value)}
-                  required
-                  helperText="Format: type:id"
+                  sx={{ width: '100%', maxWidth: 600 }}
+                  label="Condition (Optional)"
+                  value={freeformCondition}
+                  onChange={(e) => setFreeformCondition(e.target.value)}
+                  multiline
+                  rows={3}
+                  helperText='JSON format: {"name": "condition_name", "context": {"param1": "value1"}}'
+                  placeholder='{"name": "condition_name", "context": {"param1": "value1", "param2": "value2"}}'
                 />
 
                 <Button 
