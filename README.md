@@ -144,3 +144,55 @@ OpenFGA Studio is built with modern web technologies:
 OpenFGA Studio simplifies the complex task of fine-grained authorization modeling and testing. Whether you're designing a new authorization system or maintaining an existing one, this tool provides the features needed to work efficiently with OpenFGA.
 
 The combination of visual tools, intuitive interfaces, and powerful testing capabilities makes it an essential tool for developers working with authorization systems. The tool continues to evolve with new features and improvements based on community feedback and real-world usage patterns.
+
+## Running the image and examples
+
+- Default (development): the container will start an embedded OpenFGA by default. Example:
+
+  docker run -p 3000:3000 ghcr.io/prakashm88/openfga-studio
+
+- External OpenFGA (production/integration): set `OPENFGA_HOST` (and optionally `OPENFGA_HTTP_PORT`, `OPENFGA_GRPC_PORT`) to point the UI to an existing instance. Example:
+
+  docker run -p 3000:3000 -e OPENFGA_HOST=openfga.example.com -e OPENFGA_HTTP_PORT=8080 ghcr.io/prakashm88/openfga-studio
+
+- Override behavior explicitly (advanced): use `DISABLE_LOCAL_OPENFGA=true` to force UI-only mode or `ENABLE_LOCAL_OPENFGA=true` to force running local OpenFGA.
+
+### Developing & testing the UI locally (npm)
+
+You can run and test the UI without building the Docker image.
+
+- Install dependencies:
+
+  npm install
+
+- Run the dev server (fast, HMR). The dev server proxies `/api` to `http://localhost:8080` by default:
+
+  npm run dev
+
+  (dev server default port: `5173`)
+
+- Build and preview a production bundle:
+
+  VITE_OPENFGA_API_URL=http://localhost:8080 npm run build
+  npm run preview
+
+- Point the UI at an existing OpenFGA instance:
+  - Set `VITE_OPENFGA_API_URL` to the full API URL (example: `http://openfga.example.com:8080`) when running `npm run dev` or when building the app. Example:
+
+    VITE_OPENFGA_API_URL=http://openfga.example.com:8080 npm run dev
+
+  - Alternatively, create a `.env.local` file with `VITE_OPENFGA_API_URL="http://openfga.example.com:8080"`.
+
+- Notes on CORS & proxying:
+  - The dev server proxies `/api` to `http://localhost:8080` by default (see `vite.config.ts`). If you point to an external OpenFGA, either enable CORS on that server or configure the `server.proxy` block in `vite.config.ts` to route API calls through the dev server.
+
+- Running a local OpenFGA for development:
+  - Download and run the OpenFGA binary (see https://github.com/openfga/openfga/releases) and start with:
+
+    ./openfga run --http-addr 0.0.0.0:8080 --grpc-addr 0.0.0.0:8081
+
+  - Or run an existing OpenFGA container and point the UI at it (set `VITE_OPENFGA_API_URL` or rely on the proxy).
+
+### Docker Compose example
+
+An example docker-compose file is available at `examples/docker-compose.yml`. It shows a development setup (default local OpenFGA) and an example for pointing to an external OpenFGA provider.

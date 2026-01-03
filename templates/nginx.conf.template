@@ -1,0 +1,61 @@
+# Templated nginx config - variables: OPENFGA_HOST, OPENFGA_HTTP_PORT, OPENFGA_GRPC_PORT, UI_PORT
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log warn;
+pid /var/run/nginx.pid;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    sendfile on;
+    keepalive_timeout 65;
+    client_max_body_size 20M;
+
+    upstream openfga_backend {
+        server ${OPENFGA_HOST:-127.0.0.1}:${OPENFGA_HTTP_PORT:-8080};
+    }
+
+    upstream openfga_grpc {
+        server ${OPENFGA_HOST:-127.0.0.1}:${OPENFGA_GRPC_PORT:-8081};
+    }
+
+    server {
+        listen ${UI_PORT:-3000};
+        root /public;
+        index index.html;
+
+        # Frontend static content
+        location / {
+            try_files $uri $uri/ /index.html;
+            add_header Cache-Control "no-cache";
+        }
+
+        # OpenFGA HTTP API
+        location /api/ {
+            proxy_pass http://openfga_backend/;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host $host;
+            proxy_cache_bypass $http_upgrade;
+        }
+
+        # OpenFGA gRPC
+        location /grpc/ {
+            grpc_pass grpc://openfga_grpc;
+            grpc_set_header Host $host;
+            grpc_set_header X-Real-IP $remote_addr;
+        }
+
+        # Health check endpoint
+        location /health {
+            access_log off;
+            add_header Content-Type application/json;
+            return 200 '{"status":"UP"}';
+        }
+    }
+}

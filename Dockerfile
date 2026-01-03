@@ -14,8 +14,8 @@ RUN npm run build
 # Stage 2: Final - Nginx as base
 FROM nginx:1.28-alpine
 
-# Install supervisord and curl for healthcheck
-RUN apk add --no-cache supervisor curl
+# Install supervisord, curl and envsubst for template rendering
+RUN apk add --no-cache supervisor curl gettext
 
 # Download OpenFGA binary and extract
 ADD https://github.com/openfga/openfga/releases/download/v1.11.2/openfga_1.11.2_linux_amd64.tar.gz /tmp/openfga.tar.gz
@@ -27,7 +27,11 @@ RUN chmod +x /usr/local/bin/grpc_health_probe
 
 # Copy configurations and static files
 COPY --from=builder /app/dist /public
-COPY nginx.conf /etc/nginx/nginx.conf
+COPY templates/nginx.conf.template /etc/nginx/nginx.conf.template
+COPY templates/config.json.template /etc/templates/config.json.template
+COPY bin/setup.sh /usr/local/bin/setup.sh
+COPY bin/start-openfga.sh /usr/local/bin/start-openfga.sh
+RUN chmod +x /usr/local/bin/setup.sh /usr/local/bin/start-openfga.sh
 COPY supervisord.conf /etc/supervisord.conf
 
 # Expose ports (3000 for HTTP, 8080 for OpenFGA HTTP API, 8081 for gRPC)
