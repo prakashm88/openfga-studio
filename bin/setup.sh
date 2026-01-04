@@ -181,11 +181,11 @@ if [ -f /etc/nginx/nginx.conf.template ]; then
 fi
 
 if [ -f /etc/templates/config.json.template ]; then
-  mkdir -p /usr/share/nginx/html
-  envsubst '${OPENFGA_ENDPOINT} ${OPENFGA_HOST} ${OPENFGA_HTTP_PORT}' < /etc/templates/config.json.template > /usr/share/nginx/html/config.json
-  echo "Rendered /usr/share/nginx/html/config.json"
+  mkdir -p /public
+  envsubst '${OPENFGA_ENDPOINT} ${OPENFGA_HOST} ${OPENFGA_HTTP_PORT}' < /etc/templates/config.json.template > /public/config.json
+  echo "Rendered /public/config.json"
   echo "--- config.json ---"
-  sed -n '1,40p' /usr/share/nginx/html/config.json || true
+  sed -n '1,40p' /public/config.json || true
 fi
 
 # Normalize truthy values
