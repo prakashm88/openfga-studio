@@ -147,15 +147,51 @@ The combination of visual tools, intuitive interfaces, and powerful testing capa
 
 ## Running the image and examples
 
-- Default (development): the container will start an embedded OpenFGA by default. Example:
+### 1. Default (Embedded OpenFGA)
+The container starts an embedded OpenFGA instance by default. This is perfect for local development or quick testing.
 
-  docker run -p 3000:3000 ghcr.io/prakashm88/openfga-studio
+```bash
+# UI available at http://localhost:3000
+# Embedded OpenFGA HTTP API at http://localhost:8080
+# Embedded OpenFGA gRPC at localhost:8081
+docker run -p 3000:3000 -p 8080:8080 -p 8081:8081 ghcr.io/prakashm88/openfga-studio
+```
 
-- External OpenFGA (production/integration): set `OPENFGA_HOST` (and optionally `OPENFGA_HTTP_PORT`, `OPENFGA_GRPC_PORT`) to point the UI to an existing instance. Example:
+### 2. External OpenFGA (Production/Integration)
+You can point the Studio to an existing OpenFGA instance (e.g., OpenFGA Cloud, Render, or another container). There are two ways to configure this:
 
-  docker run -p 3000:3000 -e OPENFGA_HOST=openfga.example.com -e OPENFGA_HTTP_PORT=8080 ghcr.io/prakashm88/openfga-studio
+#### Option A: Using `OPENFGA_ENDPOINT` (Recommended)
+Simply provide the full URL to your OpenFGA API. This handles scheme, host, port, and path prefixes automatically.
 
-- Override behavior explicitly (advanced): use `DISABLE_LOCAL_OPENFGA=true` to force UI-only mode or `ENABLE_LOCAL_OPENFGA=true` to force running local OpenFGA.
+```bash
+# Example: Connecting to a hosted instance with a path prefix
+docker run -p 3000:3000 \
+  -e OPENFGA_ENDPOINT=https://openfga-studio.onrender.com/api \
+  ghcr.io/prakashm88/openfga-studio
+```
+
+#### Option B: Using Individual Components
+You can also configure the connection using specific environment variables.
+
+```bash
+docker run -p 3000:3000 \
+  -e OPENFGA_SCHEME=https \
+  -e OPENFGA_HOST=openfga-studio.onrender.com \
+  -e OPENFGA_PATH_PREFIX=api \
+  ghcr.io/prakashm88/openfga-studio
+```
+
+**Available Variables:**
+- `OPENFGA_ENDPOINT`: Full URL (e.g., `https://api.example.com/v1`). Takes precedence if set.
+- `OPENFGA_HOST`: Hostname (e.g., `api.example.com`).
+- `OPENFGA_SCHEME`: `http` or `https` (default: `http`).
+- `OPENFGA_HTTP_PORT`: Port number (default: `80` for http, `443` for https, or `8080` for localhost).
+- `OPENFGA_GRPC_PORT`: gRPC Port number (default: `8081`).
+- `OPENFGA_PATH_PREFIX`: URL path prefix (e.g., `api` or `/v1`).
+
+### 3. Advanced Configuration
+- **Force UI Only**: `DISABLE_LOCAL_OPENFGA=true` (useful if you don't want the embedded instance to start, even if no external host is configured).
+- **Force Local Instance**: `ENABLE_LOCAL_OPENFGA=true` (forces embedded instance even if external variables are present).
 
 ### Developing & testing the UI locally (npm)
 
