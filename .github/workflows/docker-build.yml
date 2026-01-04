@@ -70,3 +70,49 @@ jobs:
       if: ${{ github.event_name != 'pull_request' }}
       run: |
         echo "Image digest: ${{ steps.build.outputs.digest }}"
+
+  smoke-tests:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build local image for smoke tests
+        run: docker build -t openfga-studio:smoke .
+
+      - name: Create docker network
+        run: docker network create smoke-net || true
+
+      - name: Default mode smoke test (local OpenFGA should start)
+        run: |
+          docker run -d --name studio-default --network smoke-net -p 3005:3000 openfga-studio:smoke
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:3005/health; then echo ok; break; fi
+            sleep 1
+          done
+          # verify OpenFGA process is present inside container
+          docker exec studio-default ps aux | grep -v grep | grep openfga || { echo "openfga process not found" && docker logs studio-default && exit 1; }
+          docker rm -f studio-default || true
+
+      - name: External backend mock server
+        run: |
+          # Start a tiny HTTP server that replies with a JSON body on any path
+          docker run -d --name mock-openfga --network smoke-net hashicorp/http-echo -text '{"status":"UP"}' -listen :5000
+          # Wait for the mock server to be reachable
+          for i in $(seq 1 10); do if docker exec mock-openfga wget -qO- http://localhost:5000/health >/dev/null 2>&1; then break; fi; sleep 1; done
+
+      - name: External mode smoke test (should use external OpenFGA)
+        run: |
+          docker run -d --name studio-external --network smoke-net -p 3006:3000 -e OPENFGA_HOST=mock-openfga -e OPENFGA_HTTP_PORT=5000 openfga-studio:smoke
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:3006/config.json; then echo ok; break; fi
+            sleep 1
+          done
+          # local openfga should NOT be running
+          docker exec studio-external sh -c "ps aux | grep openfga | grep -v grep" && { echo "openfga should not be running in external mode" && docker logs studio-external && exit 1; } || echo "OpenFGA not running, as expected"
+          curl -fsS http://localhost:3006/config.json | grep mock-openfga || (echo "config.json not configured" && docker logs studio-external && exit 1)
+          docker rm -f studio-external mock-openfga || true
+
+      - name: Cleanup network
+        run: docker network rm smoke-net || true

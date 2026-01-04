@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  # Development - uses embedded OpenFGA by default
+  openfga-studio-dev:
+    image: ghcr.io/prakashm88/openfga-studio:dev
+    ports:
+      - "3000:3000"
+    environment:
+      - UI_PORT=3000
+    volumes:
+      - openfga-data:/data
+
+  # Production/Integration - UI-only pointing to external OpenFGA
+  openfga-studio:
+    image: ghcr.io/prakashm88/openfga-studio:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - OPENFGA_HOST=openfga.example.com
+      - OPENFGA_HTTP_PORT=8080
+      - OPENFGA_GRPC_PORT=8081
+
+volumes:
+  openfga-data:
