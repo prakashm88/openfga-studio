@@ -51,6 +51,7 @@ http {
             proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection $connection_upgrade;
             proxy_set_header Host ${OPENFGA_HOST};
+${OPENFGA_AUTH_BLOCK}
             proxy_ssl_server_name on;
             proxy_ssl_name ${OPENFGA_HOST};
             proxy_ssl_session_reuse off;

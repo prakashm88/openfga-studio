@@ -167,6 +167,7 @@ Simply provide the full URL to your OpenFGA API. This handles scheme, host, port
 # Example: Connecting to a hosted instance with a path prefix
 docker run -p 3000:3000 \
   -e OPENFGA_ENDPOINT=https://openfga-studio.onrender.com/api \
+  -e OPENFGA_PRESHARED_KEY=your-preshared-key \
   ghcr.io/prakashm88/openfga-studio
 ```
 
@@ -188,6 +189,7 @@ docker run -p 3000:3000 \
 - `OPENFGA_HTTP_PORT`: Port number (default: `80` for http, `443` for https, or `8080` for localhost).
 - `OPENFGA_GRPC_PORT`: gRPC Port number (default: `8081`).
 - `OPENFGA_PATH_PREFIX`: URL path prefix (e.g., `api` or `/v1`).
+- `OPENFGA_PRESHARED_KEY`: Optional preshared key. When set, the Nginx proxy adds it to every OpenFGA HTTP request as an `Authorization: Bearer <key>` header without exposing it to the browser.
 
 ### 3. Advanced Configuration
 - **Force UI Only**: `DISABLE_LOCAL_OPENFGA=true` (useful if you don't want the embedded instance to start, even if no external host is configured).

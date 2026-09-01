@@ -9,6 +9,23 @@ OPENFGA_GRPC_PORT=${OPENFGA_GRPC_PORT:-8081}
 OPENFGA_HOST=${OPENFGA_HOST:-127.0.0.1}
 UI_PORT=${UI_PORT:-3000}
 OPENFGA_PATH_PREFIX=${OPENFGA_PATH_PREFIX:-}
+OPENFGA_AUTH_BLOCK=''
+
+# OpenFGA's preshared-key authentication uses a Bearer token. Add the header at
+# the reverse proxy so the key is never exposed to the browser.
+if [ -n "${OPENFGA_PRESHARED_KEY:-}" ]; then
+  case "${OPENFGA_PRESHARED_KEY}" in
+    *'"'*|*'\'*)
+      echo "ERROR: OPENFGA_PRESHARED_KEY contains a character that cannot be safely added to the Nginx configuration" >&2
+      exit 1
+      ;;
+  esac
+  if printf '%s' "${OPENFGA_PRESHARED_KEY}" | LC_ALL=C grep -q '[[:cntrl:]]'; then
+    echo "ERROR: OPENFGA_PRESHARED_KEY contains a control character" >&2
+    exit 1
+  fi
+  OPENFGA_AUTH_BLOCK="            proxy_set_header Authorization \"Bearer ${OPENFGA_PRESHARED_KEY}\";"
+fi
 
 # Export variables for envsubst (envsubst reads environment variables)
 # Parse OPENFGA_ENDPOINT to ensure consistency between ENDPOINT and HOST/PORT
@@ -86,7 +103,7 @@ if [ "${OPENFGA_SCHEME}" = "https" ]; then
 else
   OPENFGA_GRPC_SCHEME=grpc
 fi
-export OPENFGA_HTTP_PORT OPENFGA_GRPC_PORT OPENFGA_HOST OPENFGA_ENDPOINT UI_PORT OPENFGA_SCHEME OPENFGA_GRPC_SCHEME OPENFGA_PATH_PREFIX
+export OPENFGA_HTTP_PORT OPENFGA_GRPC_PORT OPENFGA_HOST OPENFGA_ENDPOINT UI_PORT OPENFGA_SCHEME OPENFGA_GRPC_SCHEME OPENFGA_PATH_PREFIX OPENFGA_AUTH_BLOCK
 
 echo "Configs obtained: $OPENFGA_HTTP_PORT $OPENFGA_GRPC_PORT $OPENFGA_HOST $OPENFGA_ENDPOINT $UI_PORT $OPENFGA_SCHEME $OPENFGA_GRPC_SCHEME"
 
@@ -174,10 +191,8 @@ export OPENFGA_GRPC_BLOCK
 
 # Render templates into place
 if [ -f /etc/nginx/nginx.conf.template ]; then
-  envsubst '${OPENFGA_HOST} ${OPENFGA_HTTP_PORT} ${OPENFGA_GRPC_PORT} ${UI_PORT} ${OPENFGA_ENDPOINT} ${OPENFGA_SCHEME} ${OPENFGA_GRPC_SCHEME} ${OPENFGA_GRPC_BLOCK} ${OPENFGA_PATH_PREFIX}' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf
+  envsubst '${OPENFGA_HOST} ${OPENFGA_HTTP_PORT} ${OPENFGA_GRPC_PORT} ${UI_PORT} ${OPENFGA_ENDPOINT} ${OPENFGA_SCHEME} ${OPENFGA_GRPC_SCHEME} ${OPENFGA_GRPC_BLOCK} ${OPENFGA_PATH_PREFIX} ${OPENFGA_AUTH_BLOCK}' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf
   echo "Rendered /etc/nginx/nginx.conf from template"
-  echo "--- Rendered nginx.conf (first 80 lines) ---"
-  sed -n '1,80p' /etc/nginx/nginx.conf || true
 fi
 
 if [ -f /etc/templates/config.json.template ]; then

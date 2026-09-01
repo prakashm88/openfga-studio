@@ -20,6 +20,7 @@ services:
       - OPENFGA_HOST=openfga.example.com
       - OPENFGA_HTTP_PORT=8080
       - OPENFGA_GRPC_PORT=8081
+      # - OPENFGA_PRESHARED_KEY=your-preshared-key
 
 volumes:
   openfga-data:
