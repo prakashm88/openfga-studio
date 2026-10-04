@@ -26,6 +26,7 @@
     "@mui/icons-material": "^7.1.1",
     "@mui/material": "^7.1.1",
     "@openfga/sdk": "^0.8.1",
+    "@openfga/syntax-transformer": "^0.2.1",
     "axios": "^1.13.2",
     "html-to-image": "^1.11.13",
     "http-proxy-middleware": "^3.0.5",

@@ -68,6 +68,15 @@ export class OpenFGAService {
       return response.data;
     } catch (error) {
       console.error('Failed to write authorization model:', error);
+      // OpenFGA returns validation details in the response body; axios's own
+      // error.message is just "Request failed with status code 400". Surface
+      // the real message so the UI shows e.g. the offending relation.
+      if (axios.isAxiosError(error)) {
+        const data = error.response?.data as { message?: string } | undefined;
+        if (data?.message) {
+          throw new Error(data.message);
+        }
+      }
       throw error;
     }
   }
