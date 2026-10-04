@@ -177,10 +177,12 @@ export const StoreSelect = ({ selectedStore, onStoreChange }: StoreSelectProps) 
       <Dialog 
         open={isCreateDialogOpen} 
         onClose={() => setIsCreateDialogOpen(false)}
-        PaperProps={{
-          sx: {
-            bgcolor: 'background.paper',
-            backgroundImage: 'none'
+        slotProps={{
+          paper: {
+            sx: {
+              bgcolor: 'background.paper',
+              backgroundImage: 'none'
+            }
           }
         }}
       >

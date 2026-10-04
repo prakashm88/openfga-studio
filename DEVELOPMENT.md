@@ -87,9 +87,13 @@ The container includes health checks for both:
 
 ## Common Development Tasks
 
-### Running Tests
+### Running E2E Tests
+
+Install the Playwright browser once, then run the browser test suite. Playwright starts Vite automatically and the tests mock OpenFGA API responses.
+
 ```bash
-npm test
+npx playwright install chromium
+npm run test:e2e
 ```
 
 ### Building for Production

@@ -261,7 +261,7 @@ function QueryTab({
           borderColor: "divider",
         }}
       >
-        <Typography variant="h6" fontSize={18} fontWeight="bold">
+        <Typography variant="h6" sx={{ fontSize: 18, fontWeight: 'bold' }}>
           Validate Access
         </Typography>
       </Box>
@@ -282,7 +282,7 @@ function QueryTab({
               bgcolor: "background.default",
             }}
           >
-            <Typography fontSize={14}>Mode:</Typography>
+            <Typography sx={{ fontSize: 14 }}>Mode:</Typography>
             <ToggleButtonGroup
               value={queryMode}
               exclusive

@@ -1,7 +1,7 @@
 import { Component } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
 import { Box, Typography, Button, Paper } from '@mui/material';
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlined';
 
 interface Props {
   children: ReactNode;
@@ -73,7 +73,7 @@ export class ErrorBoundary extends Component<Props, State> {
             >
               Reload Page
             </Button>
-            {process.env.NODE_ENV === 'development' && this.state.errorInfo && (
+            {import.meta.env.DEV && this.state.errorInfo && (
               <Box sx={{ mt: 2, textAlign: 'left' }}>
                 <Typography variant="caption" component="pre" sx={{ 
                   whiteSpace: 'pre-wrap',

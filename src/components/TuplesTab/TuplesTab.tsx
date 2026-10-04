@@ -328,7 +328,7 @@ export default function TuplesTab({ storeId, currentModel, authModelId }: Tuples
         borderBottom: 1,
         borderColor: 'divider'
       }}>
-        <Typography variant="h6" fontSize={18} fontWeight={"bold"}>
+        <Typography variant="h6" sx={{ fontSize: 18, fontWeight: 'bold' }}>
           Add Tuples
         </Typography>
       </Box>
@@ -347,7 +347,7 @@ export default function TuplesTab({ storeId, currentModel, authModelId }: Tuples
             borderColor: 'divider',
             bgcolor: 'background.default'
           }}>
-            <Typography fontSize={14}>Mode:</Typography>
+            <Typography sx={{ fontSize: 14 }}>Mode:</Typography>
             <ToggleButtonGroup
               value={mode}
               exclusive
@@ -750,7 +750,7 @@ export default function TuplesTab({ storeId, currentModel, authModelId }: Tuples
           autoHideDuration={10000}
           onClose={() => setNotification(null)}
           anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-          TransitionComponent={SlideTransition}
+          slots={{ transition: SlideTransition }}
           sx={{
             '& .MuiPaper-root': {
               maxWidth: '600px',
