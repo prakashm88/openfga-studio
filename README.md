@@ -195,6 +195,61 @@ docker run -p 3000:3000 \
 - **Force UI Only**: `DISABLE_LOCAL_OPENFGA=true` (useful if you don't want the embedded instance to start, even if no external host is configured).
 - **Force Local Instance**: `ENABLE_LOCAL_OPENFGA=true` (forces embedded instance even if external variables are present).
 
+### 4. Plugins
+Plugins add views to the graph panel of the model tab. A plugin is a JavaScript module that the browser loads when the Studio opens. You do not rebuild the image to add or change a plugin.
+
+1. Mount the folder that holds the plugin files under `/public` in the container.
+2. List the plugin files in `STUDIO_PLUGINS`, separated by commas. A path is relative to the UI root. A full URL also works.
+
+```yaml
+services:
+  openfga-studio:
+    image: ghcr.io/prakashm88/openfga-studio:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - STUDIO_PLUGINS=plugins/type-graph.js
+    volumes:
+      - ./examples/plugins:/public/plugins:ro
+```
+
+When you change `STUDIO_PLUGINS`, restart the container. When you change a plugin file, reload the page.
+
+The default export of a plugin module is a function. The Studio calls it with an API object:
+
+```js
+export default function register(studio) {
+  studio.registerGraphView({
+    id: 'my-view', // Must be unique. "model" is the built-in view.
+    label: 'My view', // The text on the view button.
+    async build({ model, modelJson, storeId, storeName }) {
+      return {
+        nodes: [{ id: 'user', data: { label: 'user', type: 'type' } }],
+        edges: [],
+      };
+    },
+  });
+}
+```
+
+- `model` is the text in the editor. `modelJson` is the same model as OpenFGA JSON, or `null` when the text is not a valid model.
+- `build` returns [React Flow](https://reactflow.dev/) nodes and edges. `data.type` sets the node style: `type`, `relation`, `definition` or `condition`.
+- The Studio lays out the nodes that have no `position`.
+- The Studio calls `build` again when the model text changes, and when you click the rebuild button.
+- A plugin can `fetch` other files, for example model source files in the same mounted folder.
+
+[`examples/plugins/type-graph.js`](examples/plugins/type-graph.js) adds a "Types" view. It shows one node for each type, and an edge for each type that a relation accepts.
+
+![Types view from the example plugin](screenshots/6-plugin-graph-view.png)
+
+A plugin runs in the Studio page with the same access as the Studio. Only load plugins that you trust.
+
+To use plugins with `npm run dev`, copy them to `public/plugins/` and create `public/config.json`:
+
+```json
+{ "STUDIO_PLUGINS": ["plugins/type-graph.js"] }
+```
+
 ### Developing & testing the UI locally (npm)
 
 You can run and test the UI without building the Docker image.

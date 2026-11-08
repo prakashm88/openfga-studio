@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
-import { Box, Paper, Button, IconButton, Snackbar, Alert } from '@mui/material';
+import { Box, Paper, Button, IconButton, Snackbar, Alert, ToggleButton, ToggleButtonGroup, Tooltip } from '@mui/material';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { AuthModelEditor } from '../AuthModelEditor/AuthModelEditor';
@@ -10,6 +11,21 @@ import { parseAuthModelToGraph } from '../../utils/authModelParser';
 import { dslToJson } from '../../utils/modelConverter';
 import type { Node, Edge, NodeChange, EdgeChange } from 'reactflow';
 import { applyNodeChanges, applyEdgeChanges } from 'reactflow';
+import type { OpenFGAModel } from '../../types/models';
+import { loadPlugins, MODEL_VIEW_ID } from '../../plugins/loader';
+import { layoutGraph } from '../../plugins/layout';
+import type { GraphView } from '../../plugins/types';
+
+// Plugin views can fetch files, so they rebuild after a pause in typing instead of on each key.
+const PLUGIN_VIEW_DELAY_MS = 300;
+
+function toModelJson(model: string): OpenFGAModel | null {
+  try {
+    return model.trim().startsWith('{') ? JSON.parse(model) : dslToJson(model);
+  } catch {
+    return null;
+  }
+}
 
 interface AuthModelTabProps {
   storeId: string;
@@ -29,17 +45,63 @@ export default function AuthModelTab({ storeId, storeName, initialModel, onModel
     message: string;
     severity: 'success' | 'error';
   }>({ open: false, message: '', severity: 'success' });
+  const [graphViews, setGraphViews] = useState<GraphView[]>([]);
+  const [pluginErrors, setPluginErrors] = useState<string[]>([]);
+  const [selectedViewId, setSelectedViewId] = useState(MODEL_VIEW_ID);
+  const [viewError, setViewError] = useState<string | null>(null);
+  const [rebuildCount, setRebuildCount] = useState(0);
 
   useEffect(() => {
     setAuthModel(initialModel);
-    try {
-      const { nodes: initialNodes, edges: initialEdges } = parseAuthModelToGraph(initialModel, storeName);
-      setNodes(initialNodes);
-      setEdges(initialEdges);
-    } catch (error) {
-      console.error('Failed to parse initial auth model:', error);
+  }, [initialModel]);
+
+  useEffect(() => {
+    let active = true;
+    loadPlugins().then(({ graphViews: loadedViews, errors }) => {
+      if (active) {
+        setGraphViews(loadedViews);
+        setPluginErrors(errors);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const view = graphViews.find((candidate) => candidate.id === selectedViewId);
+    setViewError(null);
+    if (!view) {
+      try {
+        const { nodes: newNodes, edges: newEdges } = parseAuthModelToGraph(authModel, storeName);
+        setNodes(newNodes);
+        setEdges(newEdges);
+      } catch (error) {
+        console.error('Failed to parse auth model:', error);
+      }
+      return;
     }
-  }, [initialModel, storeName]);
+
+    let active = true;
+    const timer = setTimeout(async () => {
+      try {
+        const result = await view.build({ model: authModel, modelJson: toModelJson(authModel), storeId, storeName });
+        if (active) {
+          setNodes(layoutGraph(result.nodes, result.edges));
+          setEdges(result.edges);
+        }
+      } catch (error) {
+        console.error(`The graph view ${view.id} failed:`, error);
+        if (active) {
+          setViewError(`${view.label}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+    }, PLUGIN_VIEW_DELAY_MS);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [authModel, storeId, storeName, graphViews, selectedViewId, rebuildCount]);
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     setNodes((nds) => applyNodeChanges(changes, nds));
@@ -51,13 +113,6 @@ export default function AuthModelTab({ storeId, storeName, initialModel, onModel
 
   const handleAuthModelChange = (value: string) => {
     setAuthModel(value);
-    try {
-      const { nodes: newNodes, edges: newEdges } = parseAuthModelToGraph(value, storeName);
-      setNodes(newNodes);
-      setEdges(newEdges);
-    } catch (error) {
-      console.error('Failed to parse auth model:', error);
-    }
   };
 
   const handleSave = async () => {
@@ -170,7 +225,42 @@ export default function AuthModelTab({ storeId, storeName, initialModel, onModel
         minWidth: rightPanelExpanded ? '400px' : 0
       }}>
         <Paper sx={{ p: 2, height: '100%', width: '100%' }}>
+          {graphViews.length > 0 && (
+            <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <ToggleButtonGroup
+                size="small"
+                exclusive
+                value={selectedViewId}
+                onChange={(_, value: string | null) => {
+                  if (value) {
+                    // Start the new view empty, so that React Flow fits the viewport to its nodes, not the old ones.
+                    setNodes([]);
+                    setEdges([]);
+                    setSelectedViewId(value);
+                  }
+                }}
+              >
+                <ToggleButton value={MODEL_VIEW_ID}>Model</ToggleButton>
+                {graphViews.map((view) => (
+                  <ToggleButton key={view.id} value={view.id}>{view.label}</ToggleButton>
+                ))}
+              </ToggleButtonGroup>
+              {selectedViewId !== MODEL_VIEW_ID && (
+                <Tooltip title="Rebuild graph">
+                  <IconButton size="small" onClick={() => setRebuildCount((count) => count + 1)}>
+                    <RefreshIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Box>
+          )}
+          {pluginErrors.map((error) => (
+            <Alert key={error} severity="warning" sx={{ mb: 1 }}>Plugin failed to load: {error}</Alert>
+          ))}
+          {viewError && <Alert severity="error" sx={{ mb: 1 }}>{viewError}</Alert>}
           <AuthModelGraph
+            // React Flow fits the viewport only once per mount, so each view gets a new mount.
+            key={selectedViewId}
             nodes={nodes}
             edges={edges}
             onNodesChange={onNodesChange}
