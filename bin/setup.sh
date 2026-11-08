@@ -189,6 +189,31 @@ EOF
 fi
 export OPENFGA_GRPC_BLOCK
 
+# STUDIO_PLUGINS is a comma-separated list of plugin module URLs, relative to the UI root or absolute.
+# Write it into config.json as a JSON array. Reject the characters that would break the JSON string.
+STUDIO_PLUGINS_JSON='[]'
+if [ -n "${STUDIO_PLUGINS:-}" ]; then
+  if printf '%s' "${STUDIO_PLUGINS}" | LC_ALL=C grep -q '["\\[:cntrl:]]'; then
+    echo "ERROR: STUDIO_PLUGINS contains a quote, a backslash or a control character" >&2
+    exit 1
+  fi
+  STUDIO_PLUGINS_JSON='['
+  _separator=''
+  _old_ifs=$IFS
+  IFS=','
+  set -f
+  for _plugin in ${STUDIO_PLUGINS}; do
+    _plugin=$(printf '%s' "${_plugin}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+    [ -n "${_plugin}" ] || continue
+    STUDIO_PLUGINS_JSON="${STUDIO_PLUGINS_JSON}${_separator}\"${_plugin}\""
+    _separator=','
+  done
+  set +f
+  IFS=$_old_ifs
+  STUDIO_PLUGINS_JSON="${STUDIO_PLUGINS_JSON}]"
+fi
+export STUDIO_PLUGINS_JSON
+
 # Render templates into place
 if [ -f /etc/nginx/nginx.conf.template ]; then
   envsubst '${OPENFGA_HOST} ${OPENFGA_HTTP_PORT} ${OPENFGA_GRPC_PORT} ${UI_PORT} ${OPENFGA_ENDPOINT} ${OPENFGA_SCHEME} ${OPENFGA_GRPC_SCHEME} ${OPENFGA_GRPC_BLOCK} ${OPENFGA_PATH_PREFIX} ${OPENFGA_AUTH_BLOCK}' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf
@@ -197,7 +222,7 @@ fi
 
 if [ -f /etc/templates/config.json.template ]; then
   mkdir -p /public
-  envsubst '${OPENFGA_ENDPOINT} ${OPENFGA_HOST} ${OPENFGA_HTTP_PORT}' < /etc/templates/config.json.template > /public/config.json
+  envsubst '${OPENFGA_ENDPOINT} ${OPENFGA_HOST} ${OPENFGA_HTTP_PORT} ${STUDIO_PLUGINS_JSON}' < /etc/templates/config.json.template > /public/config.json
   echo "Rendered /public/config.json"
   echo "--- config.json ---"
   sed -n '1,40p' /public/config.json || true

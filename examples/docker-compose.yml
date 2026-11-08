@@ -8,8 +8,11 @@ services:
       - "3000:3000"
     environment:
       - UI_PORT=3000
+      # Load the example plugin. See "Plugins" in the README.
+      # - STUDIO_PLUGINS=plugins/type-graph.js
     volumes:
       - openfga-data:/data
+      # - ./plugins:/public/plugins:ro
 
   # Production/Integration - UI-only pointing to external OpenFGA
   openfga-studio:
