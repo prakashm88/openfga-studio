@@ -6,10 +6,10 @@ on:
     tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
-    types: [closed]
+    types: [opened, synchronize, reopened]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -18,7 +18,6 @@ env:
 
 jobs:
   build-and-push:
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.merged == true }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -62,8 +61,8 @@ jobs:
         push: ${{ github.event_name != 'pull_request' }}
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+        cache-from: type=gha,scope=${{ github.event_name }}-${{ github.ref }}
+        cache-to: type=gha,mode=max,scope=${{ github.event_name }}-${{ github.ref }}
         platforms: linux/amd64,linux/arm64
 
     - name: Image digest
