@@ -22,13 +22,5 @@ export default defineConfig({
     outDir: "dist",
     assetsDir: "assets",
     emptyOutDir: true,
-    // Ensure we generate a single bundle for better performance
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          vendor: ["react", "react-dom", "reactflow", "axios", "html-to-image"],
-        },
-      },
-    },
   },
 });

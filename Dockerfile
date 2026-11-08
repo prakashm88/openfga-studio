@@ -1,5 +1,5 @@
 # Stage 1: Build static assets with Node
-FROM node:24.12.0-slim AS builder
+FROM node:26.13.0-bookworm-slim@sha256:add5c17c14752c54d2f3d519ec46a3815684d41c33f198bcb09fb998f7dcbf68 AS builder
 
 WORKDIR /app
 
@@ -12,17 +12,17 @@ COPY . .
 RUN npm run build
 
 # Stage 2: Final - Nginx as base
-FROM nginx:1.28-alpine
+FROM nginx:1.31.6-alpine3.24@sha256:df221db836e1754089190208cee7eeda94f233197056426eda74a43ab1abeac2
 
 # Install supervisord, curl and envsubst for template rendering
 RUN apk add --no-cache supervisor curl gettext
 
 # Download OpenFGA binary and extract
-ADD https://github.com/openfga/openfga/releases/download/v1.11.2/openfga_1.11.2_linux_amd64.tar.gz /tmp/openfga.tar.gz
+ADD https://github.com/openfga/openfga/releases/download/v1.21.0/openfga_1.21.0_linux_amd64.tar.gz /tmp/openfga.tar.gz
 RUN tar -xzf /tmp/openfga.tar.gz -C / && rm /tmp/openfga.tar.gz && chmod +x /openfga
 
 # Download grpc_health_probe
-ADD https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/v0.4.42/grpc_health_probe-linux-amd64 /usr/local/bin/grpc_health_probe
+ADD https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/v0.4.57/grpc_health_probe-linux-amd64 /usr/local/bin/grpc_health_probe
 RUN chmod +x /usr/local/bin/grpc_health_probe
 
 # Copy configurations and static files
